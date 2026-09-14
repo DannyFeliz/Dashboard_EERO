@@ -25,10 +25,12 @@ document.addEventListener('alpine:init', () => {
       manual: '/manual'
     },
     currentTab: 'overview',
-    sidebarCollapsed: localStorage.getItem('eero_sidebar_collapsed') === 'true',
+    sidebarCollapsed: window.matchMedia('(max-width: 1199px)').matches || localStorage.getItem('eero_sidebar_collapsed') === 'true',
     toggleSidebar() {
       this.sidebarCollapsed = !this.sidebarCollapsed;
-      localStorage.setItem('eero_sidebar_collapsed', this.sidebarCollapsed);
+      if (!window.matchMedia('(max-width: 767px)').matches) {
+        localStorage.setItem('eero_sidebar_collapsed', this.sidebarCollapsed);
+      }
     },
     
     // Auth & Session State
@@ -308,6 +310,9 @@ document.addEventListener('alpine:init', () => {
       if (window.location.pathname === '/') {
         window.history.replaceState({}, '', this.routes.overview);
       }
+      window.matchMedia('(max-width: 1199px)').addEventListener('change', ({ matches }) => {
+        this.sidebarCollapsed = matches || localStorage.getItem('eero_sidebar_collapsed') === 'true';
+      });
       this.initTheme();
       await this.setLanguage(this.currentLanguage);
       await this.checkAuthStatus();
@@ -640,6 +645,7 @@ document.addEventListener('alpine:init', () => {
       if (updateUrl && `${window.location.pathname}${window.location.search}` !== url) {
         window.history.pushState({}, '', url);
       }
+      if (window.matchMedia('(max-width: 767px)').matches) this.sidebarCollapsed = true;
       if (tab === 'speedtest') {
         setTimeout(async () => {
           await this.loadSpeedtestData();
