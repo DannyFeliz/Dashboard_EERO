@@ -1066,6 +1066,7 @@ document.addEventListener('alpine:init', () => {
             const is24G = Boolean(d.wireless_band === '2.4GHz' || d.frequency_band === '2.4 GHz' || d.frequency_band === '2.4GHz' || (d.channel >= 1 && d.channel <= 14 && !is6G));
             const is5G = Boolean(!is6G && !is24G && (d.wireless_band === '5GHz' || d.frequency_band === '5 GHz' || d.frequency_band === '5GHz' || (d.channel >= 32 && d.channel <= 177)));
             
+            const b = this.selectedBandFilter;
             let match = false;
             if (b === '6GHz') match = is6G;
             else if (b === '5GHz') match = is5G;
