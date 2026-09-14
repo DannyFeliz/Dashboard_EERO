@@ -441,17 +441,21 @@ document.addEventListener('alpine:init', () => {
     },
 
     formatDnsServers(dns) {
-      if (!dns) return '192.168.4.104, 1.1.1.1';
+      const fallbackIp = this.network?.gateway_ip || '192.168.4.1';
+      if (!dns) return fallbackIp;
       const cleanIps = [];
       const extract = (val) => {
         if (!val) return;
         if (Array.isArray(val)) {
           val.forEach(extract);
         } else if (typeof val === 'object') {
+          if (val.custom) extract(val.custom);
+          if (val.nameservers) extract(val.nameservers);
           if (val.ips) extract(val.ips);
-          else if (val.nameservers) extract(val.nameservers);
-          else if (val.custom) extract(val.custom);
-          else Object.values(val).forEach(extract);
+          if (val.servers) extract(val.servers);
+          if (!val.custom && !val.nameservers && !val.ips && !val.servers) {
+            Object.values(val).forEach(extract);
+          }
         } else if (typeof val === 'string') {
           const matches = val.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g);
           if (matches) {
@@ -466,7 +470,7 @@ document.addEventListener('alpine:init', () => {
       };
       extract(dns);
       const unique = [...new Set(cleanIps)];
-      return unique.length > 0 ? unique.join(', ') : '192.168.4.104, 1.1.1.1';
+      return unique.length > 0 ? unique.join(', ') : fallbackIp;
     },
 
     t(path, params = {}) {

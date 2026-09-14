@@ -6,6 +6,20 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
 
 ## [1.4.1] - Unreleased
 
+### 🌐 Risoluzione Accurata Primary Gateway & Correzione Nodi PoE (Issue #26)
+* **🌐 Riconciliazione Avanzata Primary Gateway Mesh:**
+  * Risolta la segnalazione [Issue #26](https://github.com/EnricoFlammini/Dashboard_EERO/issues/26) in cui nodi secondari/extender alimentati tramite iniettore PoE (es. eero Outdoor 7) venivano erroneamente identificati come `PRIMARY GATEWAY (WAN)` al posto del reale router principale (es. eero Max 7) collegato all'ONT/modem su porta 10 Gbps.
+  * **Correlazione Autoritaria con Endpoint di Rete (`/2.2/networks/{id}`):** Memorizzazione persistente in sessione dell'identificativo e dell'URL del Gateway autoritativo fornito da eero Cloud (`gateway_eero_id`, `gateway_eero_url`, `gateway_ip`), utilizzato come criterio primario di elezione del nodo router.
+  * **Rilevamento Porte WAN Fisiche:** Ispezione delle proprietà delle porte Ethernet del nodo (`isWanPort`, `role: wan`, `type: wan`) con annotazione esplicita `"Port X (WAN)"` ed elezione prioritaria del nodo dotato di uplink WAN verso l'ISP.
+  * **Demotion Intelligente Nodi Extender:** Qualora un nodo extender (privo di connessione WAN a monte) fosse stato provvisoriamente etichettato come gateway, viene retrocesso ad apparato mesh preservando il suo reale stato di connessione: se alimentato da iniettore PoE (senza uplink cablato alla rete) viene correttamente identificato come `Wireless Mesh (6 GHz)` o `5 GHz` anziché mostrare etichette fuorvianti.
+
+### 🏷️ Estrazione DNS Personalizzati & Rimozione Fallback IP Sviluppatore (Issue #30)
+* **🏷️ Risoluzione Server DNS Personalizzati nel Pannello di Controllo:**
+  * Risolta la segnalazione [Issue #30](https://github.com/EnricoFlammini/Dashboard_EERO/issues/30) per cui nella card principale della dashboard venivano mostrati i server DNS `192.168.4.104, 1.1.1.1` nonostante l'utente avesse configurato server DNS personalizzati nell'app eero.
+  * **Parsing Ricorsivo Configurazioni DNS Annidate:** Implementata la scansione ad albero in `_normalize_network_details` per estrarre coerentemente gli IP dalle strutture annidate restituite dall'API cloud (`dns.custom.nameservers`, `dns.nameservers`, `dns.ips`, `wan_dns`, `dhcp.dns`).
+  * **Rimozione IP Sviluppatore:** Eliminato il fallback hardcoded `192.168.4.104` sia dal backend Python sia dal metodo frontend `formatDnsServers(dns)` in `app.js`.
+  * **Fallback Dinamico su Gateway LAN:** Quando non è impostato alcun DNS personalizzato a monte (DNS ISP / caching resolver locale), la dashboard mostra coerentemente l'IP del gateway eero della rete (`gateway_ip` o `192.168.4.1`).
+
 ### 📶 Rilevamento Frequenze Backhaul Mesh Wi-Fi 6E / Wi-Fi 7 (6 GHz vs 5 GHz)
 * **📶 Riconoscimento Dinamico Backhaul Wireless 6 GHz sui Nodi Mesh:**
   * Risolta la discrepanza per cui la dashboard mostrava `Wireless Mesh (5 GHz)` mentre l'app mobile eero ufficiale riportava `6 GHz` sui nodi mesh Wi-Fi 6E (eero Pro 6E) e Wi-Fi 7 (eero Max 7 / Outdoor 7).

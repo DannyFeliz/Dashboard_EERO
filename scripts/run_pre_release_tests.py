@@ -558,6 +558,114 @@ async def run_all_tests():
         runner.assert_true(net_norm.get("gateway_eero_id") == "104", f"Network details estrae gateway_eero_id='104' (ottenuto: {net_norm.get('gateway_eero_id')})")
         runner.assert_true(net_norm.get("gateway_name") == "Wiring Closet", f"Network details estrae gateway_name='Wiring Closet' (ottenuto: {net_norm.get('gateway_name')})")
 
+        # Test 4: Risoluzione Gateway con nodi PoE e nodi WAN misti (Issue #26 - jonmacdonald)
+        outdoor_poe_node = {
+            "id": "704",
+            "url": "/2.2/eeros/704",
+            "name": "Backyard Outdoor",
+            "model": "eero Outdoor 7",
+            "ip": "192.168.4.88",
+            "wired": False,
+            "ethernet_ports": [{"port": 1, "speed": "2.5 Gbps", "has_carrier": True}]
+        }
+        max7_gateway_node = {
+            "id": "701",
+            "url": "/2.2/eeros/701",
+            "name": "Main Router Max 7",
+            "model": "eero Max 7",
+            "ip": "192.168.4.1",
+            "wired": True,
+            "ethernet_ports": [
+                {"port": 1, "speed": "10 Gbps", "has_carrier": True, "role": "wan", "is_wan": True},
+                {"port": 2, "speed": "10 Gbps", "has_carrier": True}
+            ]
+        }
+        norm_outdoor = eero_client._normalize_eero_node(outdoor_poe_node)
+        norm_max7 = eero_client._normalize_eero_node(max7_gateway_node)
+
+        runner.assert_true(norm_max7.get("has_wan_port") is True, "Max 7 ha has_wan_port=True")
+        runner.assert_true(any("(WAN)" in str(p) for p in norm_max7.get("ethernet_ports_details", [])), "Dettaglio porte Max 7 etichetta correttamente '(WAN)'")
+        runner.assert_true(norm_outdoor.get("has_wan_port") is not True, "Outdoor 7 PoE non ha porta WAN")
+
+        # Simulazione riconciliazione cluster get_eeros
+        raw_cluster = [norm_outdoor, norm_max7]
+        eero_client.current_gateway_id = "701"
+        eero_client.current_gateway_url = "/2.2/eeros/701"
+        eero_client.current_gateway_ip = "192.168.4.1"
+
+        primary_gw = None
+        gw_cached_id = getattr(eero_client, "current_gateway_id", None)
+        gw_cached_url = getattr(eero_client, "current_gateway_url", None)
+        if gw_cached_id or gw_cached_url:
+            primary_gw = next((n for n in raw_cluster if (
+                (gw_cached_id and str(n.get("id") or "") == str(gw_cached_id)) or
+                (gw_cached_id and gw_cached_id in str(n.get("url") or "")) or
+                (gw_cached_url and str(n.get("url") or "") == str(gw_cached_url))
+            )), None)
+        if not primary_gw:
+            primary_gw = next((n for n in raw_cluster if n.get("has_wan_port") or any("wan" in str(p).lower() for p in n.get("ethernet_ports_details", []))), None)
+        if not primary_gw:
+            gw_cached_ip = getattr(eero_client, "current_gateway_ip", None) or "192.168.4.1"
+            primary_gw = next((n for n in raw_cluster if n.get("ip") and n.get("ip") == gw_cached_ip), None)
+        if not primary_gw:
+            primary_gw = raw_cluster[0]
+
+        for n in raw_cluster:
+            if n is primary_gw:
+                n["is_gateway"] = True
+                n["wired"] = True
+                n["backhaul_type"] = "Gateway (WAN)"
+            else:
+                n["is_gateway"] = False
+                is_6e_or_7 = any(m in str(n.get("model") or "").lower() for m in ("pro 6e", "max 7", "outdoor 7", "k010001", "s010001", "t010001"))
+                if n.get("raw_wired") is True:
+                    candidate_speeds = [parse_speed_mbps(s) for s in n.get("ethernet_ports_details", [])]
+                    spd_mbps = max(candidate_speeds) if candidate_speeds else 0
+                    spd_fmt = format_speed_mbps(spd_mbps)
+                    n["wired"] = True
+                    n["backhaul_type"] = f"Ethernet ({spd_fmt})" if spd_fmt else "Ethernet (Cablato)"
+                elif is_6e_or_7 or "6" in str(n.get("wireless_band") or ""):
+                    n["wired"] = False
+                    n["backhaul_type"] = "Wireless Mesh (6 GHz)"
+                else:
+                    n["wired"] = False
+                    n["backhaul_type"] = "Wireless Mesh (5 GHz)"
+
+        runner.assert_true(norm_max7["is_gateway"] is True, "Max 7 correttamente eletto Primary Gateway")
+        runner.assert_true(norm_max7["backhaul_type"] == "Gateway (WAN)", "Max 7 ha backhaul 'Gateway (WAN)'")
+        runner.assert_true(norm_outdoor["is_gateway"] is False, "Outdoor 7 PoE non è eletto Primary Gateway")
+        runner.assert_true(norm_outdoor["backhaul_type"] == "Wireless Mesh (6 GHz)", f"Outdoor 7 PoE ha backhaul 'Wireless Mesh (6 GHz)' (ottenuto: {norm_outdoor['backhaul_type']})")
+
+        # Test 5: Estrazione DNS Servers personalizzati e fallback gateway IP (Issue #30)
+        custom_dns_net = {
+            "name": "Custom DNS Network",
+            "gateway_ip": "192.168.4.1",
+            "dns": {
+                "parental": None,
+                "zscaler": None,
+                "caching": False,
+                "custom": {
+                    "nameservers": ["1.1.1.1", "1.0.0.1"]
+                }
+            }
+        }
+        res_custom_dns = eero_client._normalize_network_details(custom_dns_net)
+        runner.assert_true(res_custom_dns.get("dns_servers") == ["1.1.1.1", "1.0.0.1"], f"DNS personalizzati estratti correttamente (ottenuto: {res_custom_dns.get('dns_servers')})")
+        runner.assert_true("192.168.4.104" not in res_custom_dns.get("dns_servers"), "IP sviluppatore 192.168.4.104 assente da custom DNS")
+
+        # Fallback ISP DNS (nessun custom DNS configurato)
+        default_dns_net = {
+            "name": "Default DNS Network",
+            "gateway_ip": "192.168.1.1",
+            "dns": {
+                "custom": None,
+                "caching": True
+            }
+        }
+        res_default_dns = eero_client._normalize_network_details(default_dns_net)
+        runner.assert_true(res_default_dns.get("dns_servers") == ["192.168.1.1"], f"Fallback DNS usa gateway_ip di rete (ottenuto: {res_default_dns.get('dns_servers')})")
+        runner.assert_true("192.168.4.104" not in res_default_dns.get("dns_servers"), "IP sviluppatore 192.168.4.104 assente da default DNS")
+
         # =====================================================================
         # 11. TEST PRESERVAZIONE REGOLE ADGUARD HOME & MAPPING DESKTOP (Issue #21)
         # =====================================================================

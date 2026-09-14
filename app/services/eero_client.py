@@ -186,6 +186,10 @@ class EeroClient:
         self.saved_live_token: Optional[str] = None
         self.saved_live_network_id: Optional[str] = None
         self.saved_live_account_info: Optional[Dict[str, Any]] = None
+        self.current_gateway_id: Optional[str] = None
+        self.current_gateway_url: Optional[str] = None
+        self.current_gateway_name: Optional[str] = None
+        self.current_gateway_ip: Optional[str] = None
         self._is_demo_active: bool = False
         self._http_client: Optional[httpx.AsyncClient] = None
         self.load_session()
@@ -511,10 +515,15 @@ class EeroClient:
         
         if gw_id:
             data["gateway_eero_id"] = gw_id
+            self.current_gateway_id = str(gw_id)
         if gw_url:
             data["gateway_eero_url"] = gw_url
+            self.current_gateway_url = str(gw_url)
         if gw_name:
             data["gateway_name"] = gw_name
+            self.current_gateway_name = str(gw_name)
+        if data.get("gateway_ip"):
+            self.current_gateway_ip = str(data.get("gateway_ip"))
 
         # ISP
         data["isp"] = (
@@ -528,50 +537,63 @@ class EeroClient:
         # Stato Connessione WAN: SEMPRE online quando la rete risponde
         data["status"] = "online"
 
-        # DNS Servers (Supporta array, dizionario {'ips': [...]}, stringhe e liste annidate)
+        # DNS Servers (Supporta array, dizionario {'ips': [...]}, {'custom': {'nameservers': [...]}}, stringhe e liste annidate - Issue #30)
         dns_candidates = []
-        for candidate in [data.get("dns"), data.get("dns_servers"), data.get("dns_nameservers")]:
+        for candidate in [
+            data.get("dns"),
+            data.get("dns_servers"),
+            data.get("dns_nameservers"),
+            data.get("wan_dns"),
+            (data.get("dhcp") or {}).get("dns") if isinstance(data.get("dhcp"), dict) else None,
+        ]:
             if candidate:
                 dns_candidates.append(candidate)
 
         extracted_ips = []
-        for raw in dns_candidates:
-            if isinstance(raw, dict):
-                ips = raw.get("ips") or raw.get("nameservers") or raw.get("custom") or []
-                if isinstance(ips, list):
-                    extracted_ips.extend(ips)
-                elif isinstance(ips, str):
-                    extracted_ips.append(ips)
-            elif isinstance(raw, list):
-                for item in raw:
-                    if isinstance(item, dict):
-                        ips = item.get("ips") or item.get("nameservers") or []
-                        if isinstance(ips, list):
-                            extracted_ips.extend(ips)
-                        elif isinstance(ips, str):
-                            extracted_ips.append(ips)
-                    elif isinstance(item, str):
-                        found_ips = re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", item)
-                        if found_ips:
-                            extracted_ips.extend(found_ips)
-                        else:
-                            extracted_ips.append(item)
-            elif isinstance(raw, str):
-                found_ips = re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", raw)
+
+        def _collect_ips(val):
+            if not val:
+                return
+            if isinstance(val, str):
+                found_ips = re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", val)
                 if found_ips:
                     extracted_ips.extend(found_ips)
                 else:
-                    extracted_ips.append(raw)
+                    val_strip = val.strip()
+                    if val_strip and not val_strip.startswith(("{", "[")):
+                        extracted_ips.append(val_strip)
+            elif isinstance(val, list):
+                for item in val:
+                    _collect_ips(item)
+            elif isinstance(val, dict):
+                # Priorità a configurazioni custom e nameservers esplicite
+                for k in ["custom", "nameservers", "ips", "servers", "primary", "secondary", "dns"]:
+                    if k in val and val[k]:
+                        _collect_ips(val[k])
+                # Se ancora nulla, ispeziona ricorsivamente gli altri campi escludendo flag non-IP
+                if not any(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", str(x).strip()) for x in extracted_ips):
+                    for k, v in val.items():
+                        if k not in ["parental", "zscaler", "caching", "mode", "policy", "block_malware"]:
+                            _collect_ips(v)
+
+        for raw in dns_candidates:
+            _collect_ips(raw)
 
         clean_dns = []
         for ip_str in extracted_ips:
             ip_clean = str(ip_str).strip().strip("'\"")
             if ip_clean and re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip_clean):
-                if ip_clean not in clean_dns:
-                    clean_dns.append(ip_clean)
+                try:
+                    octets = [int(o) for o in ip_clean.split(".")]
+                    if len(octets) == 4 and all(0 <= o <= 255 for o in octets):
+                        if ip_clean not in clean_dns:
+                            clean_dns.append(ip_clean)
+                except Exception:
+                    pass
 
         if not clean_dns:
-            clean_dns = ["192.168.4.104", "1.1.1.1"]
+            gw_fallback = data.get("gateway_ip") or "192.168.4.1"
+            clean_dns = [gw_fallback]
 
         data["dns_servers"] = clean_dns
 
@@ -606,6 +628,18 @@ class EeroClient:
         node_id = str(node.get("id") or "").strip()
         node_serial = str(node.get("serial") or "").strip()
         node_ip = str(node.get("ip_address") or node.get("ip") or "").strip()
+
+        # Check contro Gateway registrato a livello di rete (/2.2/networks/{id} - Issue #26)
+        gw_cached_id = getattr(self, "current_gateway_id", None)
+        gw_cached_url = getattr(self, "current_gateway_url", None)
+        gw_cached_ip = getattr(self, "current_gateway_ip", None)
+
+        if gw_cached_id and node_id and str(node_id) == str(gw_cached_id):
+            return True
+        if gw_cached_url and node_url and (node_url == gw_cached_url or node_url.endswith(gw_cached_url) or gw_cached_url.endswith(node_url)):
+            return True
+        if gw_cached_ip and node_ip and node_ip == gw_cached_ip:
+            return True
 
         # 2. Stringa (URL risorsa, ID numerico, stringa booleana o IP)
         if isinstance(raw_gw, str):
@@ -798,6 +832,7 @@ class EeroClient:
         # - node.get("wired") is False for wireless mesh nodes (even if a client PC or switch is plugged into their LAN port!)
         is_gateway = node["is_gateway"]
         raw_wired = node.get("wired")
+        node["raw_wired"] = raw_wired
         
         if is_gateway:
             is_wired = True
@@ -858,9 +893,12 @@ class EeroClient:
                     if p_carrier is True or p_carrier is None or p_carrier == "up":
                         active_port_speeds.append(p_speed)
                         if p_num is not None:
-                            port_details.append(f"Port {p_num}: {p_speed}")
-                        if is_wan and speed_mbps > 0 and wan_port_speed_mbps == 0:
-                            wan_port_speed_mbps = speed_mbps
+                            wan_label = " (WAN)" if is_wan else ""
+                            port_details.append(f"Port {p_num}{wan_label}: {p_speed}")
+                        if is_wan:
+                            node["has_wan_port"] = True
+                            if speed_mbps > 0 and wan_port_speed_mbps == 0:
+                                wan_port_speed_mbps = speed_mbps
                         if has_neighbour and speed_mbps > 0 and neighbour_port_speed_mbps == 0:
                             neighbour_port_speed_mbps = speed_mbps
             elif isinstance(p_entry, (str, int)):
@@ -1508,35 +1546,61 @@ class EeroClient:
                 except Exception as ex:
                     logger.error(f"Error normalizing eero node: {ex}")
 
-            # Reconciliazione Primary Gateway: garantisce l'elezione di un unico nodo Gateway univoco
+            # Reconciliazione Primary Gateway: garantisce l'elezione di un unico nodo Gateway univoco (Issue #19 & Issue #26)
             if nodes:
-                gw_nodes = [n for n in nodes if n.get("is_gateway")]
-                if len(gw_nodes) == 0:
-                    # Se nessun nodo ha il flag gateway (es. Bridge mode con soli IP privati locali),
-                    # cerca il nodo con porta WAN o fallback sul primo nodo
-                    wan_node = next((n for n in nodes if any("wan" in str(p).lower() for p in n.get("ethernet_ports_details", []))), None)
-                    if wan_node:
-                        wan_node["is_gateway"] = True
-                        wan_node["backhaul_type"] = "Gateway (WAN)"
-                        wan_node["wired"] = True
+                primary_gw = None
+
+                # 1. Corrispondenza diretta con Gateway ID o URL restituito da /2.2/networks/{id}
+                gw_cached_id = getattr(self, "current_gateway_id", None)
+                gw_cached_url = getattr(self, "current_gateway_url", None)
+                if gw_cached_id or gw_cached_url:
+                    primary_gw = next((n for n in nodes if (
+                        (gw_cached_id and str(n.get("id") or "") == str(gw_cached_id)) or
+                        (gw_cached_id and gw_cached_id in str(n.get("url") or "")) or
+                        (gw_cached_url and str(n.get("url") or "") == str(gw_cached_url))
+                    )), None)
+
+                # 2. Nodo con porta WAN reale attiva / collegata all'ONT/modem
+                if not primary_gw:
+                    primary_gw = next((n for n in nodes if n.get("has_wan_port") or any("wan" in str(p).lower() for p in n.get("ethernet_ports_details", []))), None)
+
+                # 3. Corrispondenza IP con gateway_ip di rete (default 192.168.4.1 o subnet gateway)
+                if not primary_gw:
+                    gw_cached_ip = getattr(self, "current_gateway_ip", None) or "192.168.4.1"
+                    primary_gw = next((n for n in nodes if n.get("ip") and n.get("ip") == gw_cached_ip), None)
+
+                # 4. Nodo con flag is_gateway già impostato da _is_gateway_node
+                if not primary_gw:
+                    gw_nodes = [n for n in nodes if n.get("is_gateway")]
+                    if gw_nodes:
+                        primary_gw = gw_nodes[0]
+
+                # 5. Fallback finale al primo nodo
+                if not primary_gw:
+                    primary_gw = nodes[0]
+
+                # Demozione ed elezione coerente di tutti i nodi
+                for n in nodes:
+                    if n is primary_gw:
+                        n["is_gateway"] = True
+                        n["wired"] = True
+                        n["backhaul_type"] = "Gateway (WAN)"
                     else:
-                        nodes[0]["is_gateway"] = True
-                        nodes[0]["backhaul_type"] = "Gateway (WAN)"
-                        nodes[0]["wired"] = True
-                elif len(gw_nodes) > 1:
-                    # In caso di ambiguità con nodi multipli marcati gateway, elegge il nodo con porta WAN reale
-                    primary_gw = next((n for n in gw_nodes if any("wan" in str(p).lower() for p in n.get("ethernet_ports_details", []))), gw_nodes[0])
-                    for n in nodes:
-                        if n is not primary_gw and n.get("is_gateway"):
-                            n["is_gateway"] = False
-                            if n.get("backhaul_type") == "Gateway (WAN)":
-                                is_6e_or_7 = any(m in str(n.get("model") or "").lower() for m in ("pro 6e", "max 7", "outdoor 7", "k010001", "s010001", "t010001"))
-                                if n.get("wired"):
-                                    n["backhaul_type"] = "Ethernet (Cablato)"
-                                elif is_6e_or_7 or "6" in str(n.get("wireless_band") or ""):
-                                    n["backhaul_type"] = "Wireless Mesh (6 GHz)"
-                                else:
-                                    n["backhaul_type"] = "Wireless Mesh (5 GHz)"
+                        n["is_gateway"] = False
+                        if n.get("backhaul_type") == "Gateway (WAN)":
+                            is_6e_or_7 = any(m in str(n.get("model") or "").lower() for m in ("pro 6e", "max 7", "outdoor 7", "k010001", "s010001", "t010001"))
+                            if n.get("raw_wired") is True:
+                                candidate_speeds = [parse_speed_mbps(s) for s in n.get("ethernet_ports_details", [])]
+                                spd_mbps = max(candidate_speeds) if candidate_speeds else 0
+                                spd_fmt = format_speed_mbps(spd_mbps)
+                                n["wired"] = True
+                                n["backhaul_type"] = f"Ethernet ({spd_fmt})" if spd_fmt else "Ethernet (Cablato)"
+                            elif is_6e_or_7 or "6" in str(n.get("wireless_band") or ""):
+                                n["wired"] = False
+                                n["backhaul_type"] = "Wireless Mesh (6 GHz)"
+                            else:
+                                n["wired"] = False
+                                n["backhaul_type"] = "Wireless Mesh (5 GHz)"
 
             return nodes
 
