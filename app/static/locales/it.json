@@ -74,6 +74,8 @@
     "backhaul_gateway": "Gateway (WAN)",
     "backhaul_wired": "Ethernet (Cablato)",
     "backhaul_wireless": "Wireless Mesh (5 GHz)",
+    "backhaul_wireless_6ghz": "Wireless Mesh (6 GHz)",
+    "backhaul_wireless_5ghz": "Wireless Mesh (5 GHz)",
     "connected_clients": "Client Connessi:",
     "status": "Stato:",
     "status_optimal": "Online • Normale",

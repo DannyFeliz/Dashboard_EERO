@@ -422,6 +422,11 @@ document.addEventListener('alpine:init', () => {
       if (bh) {
         return bh;
       }
+      const modelStr = String(eero.model || '').toLowerCase();
+      const is6Eor7 = modelStr.includes('pro 6e') || modelStr.includes('max 7') || modelStr.includes('outdoor 7') || modelStr.includes('k010001') || modelStr.includes('s010001') || modelStr.includes('t010001');
+      if (is6Eor7) {
+        return this.t('dashboard.backhaul_wireless_6ghz') || 'Wireless Mesh (6 GHz)';
+      }
       return this.t('dashboard.backhaul_wireless') || 'Wireless Mesh (5 GHz)';
     },
 

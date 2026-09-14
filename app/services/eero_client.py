@@ -670,17 +670,80 @@ class EeroClient:
         # Backhaul & Inter-node Link
         conn_info = node.get("connectivity") if isinstance(node.get("connectivity"), dict) else {}
         iface_info = node.get("interface") if isinstance(node.get("interface"), dict) else {}
+        w_details = node.get("wireless_details") if isinstance(node.get("wireless_details"), dict) else {}
+        mesh_info = (
+            node.get("mesh") if isinstance(node.get("mesh"), dict)
+            else (node.get("mesh_quality") if isinstance(node.get("mesh_quality"), dict)
+            else (node.get("mesh_connection") if isinstance(node.get("mesh_connection"), dict) else {}))
+        )
 
-        raw_channel = node.get("channel") if node.get("channel") is not None else (conn_info.get("channel") or iface_info.get("channel"))
-        raw_band = node.get("wireless_band") or node.get("band") or conn_info.get("frequency") or conn_info.get("band") or iface_info.get("frequency") or ""
-        band_str = str(raw_band).lower().replace("ghz", "").replace(" ", "").strip()
-        
+        raw_channel = (
+            node.get("channel") if node.get("channel") is not None 
+            else (conn_info.get("channel") if conn_info.get("channel") is not None 
+            else (iface_info.get("channel") if iface_info.get("channel") is not None 
+            else (w_details.get("channel") if w_details.get("channel") is not None 
+            else mesh_info.get("channel"))))
+        )
         channel = 0
         if raw_channel is not None:
             try:
                 channel = int(raw_channel)
             except Exception:
                 channel = 0
+
+        raw_freq = (
+            conn_info.get("frequency") or 
+            node.get("frequency") or 
+            iface_info.get("frequency") or 
+            node.get("wireless_frequency") or 
+            w_details.get("frequency") or 
+            mesh_info.get("frequency") or 
+            ""
+        )
+        freq_num = 0
+        if raw_freq:
+            try:
+                freq_num = int(float(str(raw_freq).replace("mhz", "").replace("ghz", "").strip()))
+            except Exception:
+                freq_num = 0
+
+        raw_band = (
+            node.get("wireless_band") or 
+            node.get("band") or 
+            conn_info.get("band") or 
+            conn_info.get("wireless_band") or 
+            conn_info.get("frequency") or 
+            iface_info.get("band") or 
+            iface_info.get("frequency") or 
+            w_details.get("band") or 
+            w_details.get("wireless_band") or 
+            mesh_info.get("band") or 
+            mesh_info.get("wireless_band") or 
+            ""
+        )
+        band_str = str(raw_band).lower().replace("ghz", "").replace(" ", "").strip()
+
+        phy_type = str(
+            conn_info.get("phy_type") or 
+            node.get("phy_type") or 
+            iface_info.get("phy_type") or 
+            w_details.get("phy_type") or 
+            mesh_info.get("phy_type") or 
+            ""
+        ).upper()
+        chan_width = str(
+            conn_info.get("channel_width") or 
+            node.get("channel_width") or 
+            w_details.get("channel_width") or 
+            mesh_info.get("channel_width") or 
+            ""
+        ).upper()
+        model_str = str(
+            node.get("model") or 
+            node.get("model_number") or 
+            node.get("product_name") or 
+            ""
+        ).lower()
 
         # Signal / RSSI
         signal_str = ""
@@ -865,12 +928,64 @@ class EeroClient:
                 node["backhaul_type"] = "Ethernet (Cablato)"
         else:
             node["wired"] = False
-            if band_str in ("6", "6.0") or (channel >= 1 and channel <= 233 and "6" in band_str):
+
+            # Wi-Fi 6E & Wi-Fi 7 (6 GHz) Wireless Backhaul Detection
+            # - Frequency in MHz: 5900 - 7200 MHz
+            # - Band string: "6", "6.0", "6g", "6ghz", or contains "6ghz" / "6 ghz"
+            # - Channels:
+            #   * Channels > 177 up to 233 only exist in 6 GHz band
+            #   * 6 GHz Preferred Scanning Channels (PSC): 37, 53, 69, 85, 101, 117, 133, 181, 197, 213, 229
+            #   * Odd channel numbers between 33 and 233 (5 GHz channels 36-165 are strictly even numbers!)
+            # - Channel width: 320 MHz (Wi-Fi 7 exclusive to 6 GHz)
+            # - PHY type: EHT (Wi-Fi 7 on channel > 14)
+            is_6ghz_link = (
+                (freq_num >= 5900 and freq_num <= 7200) or
+                band_str in ("6", "6.0", "6g", "6ghz") or
+                "6g" in band_str or
+                "6ghz" in str(raw_band).lower() or
+                "6 ghz" in str(raw_band).lower() or
+                (177 < channel <= 233) or
+                (channel in (37, 53, 69, 85, 101, 117, 133, 181, 197, 213, 229)) or
+                (channel % 2 != 0 and 33 <= channel <= 233) or
+                "320" in chan_width or
+                (phy_type == "EHT" and channel > 14)
+            )
+
+            is_24ghz_link = (
+                not is_6ghz_link and (
+                    (freq_num >= 2400 and freq_num <= 2500) or
+                    band_str in ("2.4", "2", "2g", "2ghz") or
+                    "2.4" in band_str or
+                    "2.4ghz" in str(raw_band).lower() or
+                    "2.4 ghz" in str(raw_band).lower() or
+                    (1 <= channel <= 14)
+                )
+            )
+
+            is_5ghz_link = (
+                not is_6ghz_link and not is_24ghz_link and (
+                    (freq_num >= 5000 and freq_num < 5900) or
+                    band_str in ("5", "5.0", "5.8", "5g", "5ghz") or
+                    "5g" in band_str or
+                    "5ghz" in str(raw_band).lower() or
+                    "5 ghz" in str(raw_band).lower() or
+                    (36 <= channel <= 177 and channel % 2 == 0)
+                )
+            )
+
+            # Hardware capability fallback:
+            # On eero Pro 6E (K010001/S010001) and eero Max 7 (T010001), TrueMesh operates and prioritizes
+            # the dedicated 6 GHz radio as the primary inter-node wireless mesh backhaul.
+            is_6e_or_7_hardware = any(m in model_str for m in ("pro 6e", "max 7", "outdoor 7", "k010001", "s010001", "t010001"))
+
+            if is_6ghz_link:
                 node["backhaul_type"] = f"Wireless Mesh (6 GHz{signal_str})"
-            elif (channel >= 1 and channel <= 14) or band_str in ("2.4", "2"):
+            elif is_24ghz_link:
                 node["backhaul_type"] = f"Wireless Mesh (2.4 GHz{signal_str})"
-            elif (channel >= 32 and channel <= 177) or band_str in ("5", "5.0", "5.8"):
+            elif is_5ghz_link:
                 node["backhaul_type"] = f"Wireless Mesh (5 GHz{signal_str})"
+            elif is_6e_or_7_hardware and (channel == 0 or channel in (1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 233)):
+                node["backhaul_type"] = f"Wireless Mesh (6 GHz{signal_str})"
             else:
                 node["backhaul_type"] = f"Wireless Mesh (5 GHz{signal_str})"
 
@@ -1415,7 +1530,13 @@ class EeroClient:
                         if n is not primary_gw and n.get("is_gateway"):
                             n["is_gateway"] = False
                             if n.get("backhaul_type") == "Gateway (WAN)":
-                                n["backhaul_type"] = "Ethernet (Cablato)" if n.get("wired") else "Wireless Mesh (5 GHz)"
+                                is_6e_or_7 = any(m in str(n.get("model") or "").lower() for m in ("pro 6e", "max 7", "outdoor 7", "k010001", "s010001", "t010001"))
+                                if n.get("wired"):
+                                    n["backhaul_type"] = "Ethernet (Cablato)"
+                                elif is_6e_or_7 or "6" in str(n.get("wireless_band") or ""):
+                                    n["backhaul_type"] = "Wireless Mesh (6 GHz)"
+                                else:
+                                    n["backhaul_type"] = "Wireless Mesh (5 GHz)"
 
             return nodes
 

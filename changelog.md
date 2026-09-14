@@ -4,6 +4,18 @@ Tutte le modifiche rilevanti, i miglioramenti e le correzioni di bug apportate a
 
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderisce al versionamento semantico.
 
+## [1.4.1] - Unreleased
+
+### 📶 Rilevamento Frequenze Backhaul Mesh Wi-Fi 6E / Wi-Fi 7 (6 GHz vs 5 GHz)
+* **📶 Riconoscimento Dinamico Backhaul Wireless 6 GHz sui Nodi Mesh:**
+  * Risolta la discrepanza per cui la dashboard mostrava `Wireless Mesh (5 GHz)` mentre l'app mobile eero ufficiale riportava `6 GHz` sui nodi mesh Wi-Fi 6E (eero Pro 6E) e Wi-Fi 7 (eero Max 7 / Outdoor 7).
+  * **Ispezione Frequenze MHz & Canali PSC:** Estesa la normalizzazione dei nodi (`_normalize_eero_node`) per interpretare frequenze espresse in MHz (`5900 - 7200 MHz`), canali PSC (Preferred Scanning Channels: 37, 53, 69, 85, 101, 117, 133, 181, 197, 213, 229) e canali esclusivi 6 GHz (> 177 o dispari).
+  * **Risolto Conflitto Canale 69:** I canali PSC a 6 GHz (in particolare il canale 69) non ricadono più per errore nel range generico dei canali 5 GHz.
+  * **Fallback Consapevole dell'Hardware:** In assenza di metadati espliciti di frequenza nel payload REST dell'API cloud eero, il sistema riconosce i modelli hardware Wi-Fi 6E/7 (`eero Pro 6E`, `eero Max 7`) e imposta coerentemente il backhaul su `Wireless Mesh (6 GHz)` in linea con la negoziazione primaria di TrueMesh.
+  * **Interfaccia & Stile UI:** Introdotto styling cromatico dedicato (`text-sky-600 dark:text-sky-400`) per evidenziare immediatamente i nodi con collegamento backhaul a 6 GHz.
+
+---
+
 ## [1.4.0] - 2026-09-12
 
 ### 🛡️ Supporto Nativo Pi-hole v6 REST API & Bare Hostnames (Issue #25)

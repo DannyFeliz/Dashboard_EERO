@@ -310,6 +310,62 @@ async def run_all_tests():
         runner.assert_true(wireless_norm["backhaul_type"] == "Wireless Mesh (5 GHz / -58 dBm)", f"Beacon wireless con dict signal rileva 'Wireless Mesh (5 GHz / -58 dBm)' (ottenuto: {wireless_norm['backhaul_type']})")
         runner.assert_true(wireless_norm["signal_rssi"] == -58, f"Beacon wireless signal_rssi estratto come -58 (ottenuto: {wireless_norm['signal_rssi']})")
 
+        # Test 6a: Nodo Wi-Fi 6E mesh con frequenza MHz e canale PSC (frequency: 6295 MHz, channel: 69)
+        node_6ghz_raw = {
+            "name": "Office Pro 6E",
+            "model": "eero Pro 6E",
+            "gateway": False,
+            "wireless": True,
+            "connected": True,
+            "connectivity": {
+                "signal": -52,
+                "frequency": 6295,
+                "channel": 69,
+            }
+        }
+        node_6ghz_norm = eero_client._normalize_eero_node(node_6ghz_raw)
+        runner.assert_true(node_6ghz_norm["backhaul_type"] == "Wireless Mesh (6 GHz / -52 dBm)", f"Nodo Pro 6E con freq 6295 MHz rileva 'Wireless Mesh (6 GHz / -52 dBm)' (ottenuto: {node_6ghz_norm['backhaul_type']})")
+
+        # Test 6b: Nodo Wi-Fi 6E mesh con solo canale PSC 69 e segnale dict (senza stringa frequenza)
+        node_6ghz_psc_raw = {
+            "name": "Bedroom 6E",
+            "model": "eero Pro 6E",
+            "gateway": False,
+            "wireless": True,
+            "connected": True,
+            "channel": 69,
+            "signal": {"rx_rssi": -54}
+        }
+        node_6ghz_psc_norm = eero_client._normalize_eero_node(node_6ghz_psc_raw)
+        runner.assert_true(node_6ghz_psc_norm["backhaul_type"] == "Wireless Mesh (6 GHz / -54 dBm)", f"Nodo con canale PSC 69 rileva 'Wireless Mesh (6 GHz / -54 dBm)' (ottenuto: {node_6ghz_psc_norm['backhaul_type']})")
+
+        # Test 6c: Nodo Wi-Fi 6E hardware fallback (senza canale né frequenza espliciti dall'API cloud)
+        node_6ghz_hw_raw = {
+            "name": "Living Room 6E",
+            "model": "eero Pro 6E (K010001)",
+            "gateway": False,
+            "wireless": True,
+            "connected": True,
+            "signal_rssi": -48
+        }
+        node_6ghz_hw_norm = eero_client._normalize_eero_node(node_6ghz_hw_raw)
+        runner.assert_true(node_6ghz_hw_norm["backhaul_type"] == "Wireless Mesh (6 GHz / -48 dBm)", f"Nodo hardware Pro 6E senza freq API adotta 'Wireless Mesh (6 GHz / -48 dBm)' (ottenuto: {node_6ghz_hw_norm['backhaul_type']})")
+
+        # Test 6d: Nodo Wi-Fi 7 hardware (eero Max 7 su 320MHz width)
+        node_max7_raw = {
+            "name": "Attic Max 7",
+            "model": "eero Max 7",
+            "gateway": False,
+            "wireless": True,
+            "connected": True,
+            "connectivity": {
+                "channel_width": "WIDTH_320MHz",
+                "signal": -42
+            }
+        }
+        node_max7_norm = eero_client._normalize_eero_node(node_max7_raw)
+        runner.assert_true(node_max7_norm["backhaul_type"] == "Wireless Mesh (6 GHz / -42 dBm)", f"Nodo Max 7 rileva 'Wireless Mesh (6 GHz / -42 dBm)' (ottenuto: {node_max7_norm['backhaul_type']})")
+
         # Test 7: Dispositivo Wi-Fi 6 GHz (Steve iPhone 17 da Issue #14: frequency=6295, channel=69, phy_type=EHT)
         iphone17_raw = {
             "id": "dev_iphone17",

@@ -645,7 +645,7 @@
                 <!-- Backhaul (hide if single gateway node and no mesh backhaul) -->
                 <div class="flex justify-between text-slate-600 dark:text-slate-400" x-show="!eero.is_gateway || eero.backhaul_type || eeros.length > 1">
                   <span x-text="t('dashboard.backhaul')"></span>
-                  <span class="font-semibold text-emerald-600 dark:text-emerald-400" x-text="formatBackhaul(eero)"></span>
+                  <span class="font-semibold" :class="formatBackhaul(eero).includes('6 GHz') ? 'text-sky-600 dark:text-sky-400' : 'text-emerald-600 dark:text-emerald-400'" x-text="formatBackhaul(eero)"></span>
                 </div>
                 <!-- Connected Clients Count -->
                 <div class="flex justify-between text-slate-600 dark:text-slate-400">
