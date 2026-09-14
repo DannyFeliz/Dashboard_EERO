@@ -4,7 +4,7 @@ Tutte le modifiche rilevanti, i miglioramenti e le correzioni di bug apportate a
 
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderisce al versionamento semantico.
 
-## [1.4.1] - Unreleased
+## [1.4.01] - 2026-09-14 (v1.4.1)
 
 ### 🌐 Risoluzione Accurata Primary Gateway & Correzione Nodi PoE (Issue #26)
 * **🌐 Riconciliazione Avanzata Primary Gateway Mesh:**

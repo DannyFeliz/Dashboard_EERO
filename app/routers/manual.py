@@ -365,6 +365,12 @@ CHANGELOG_SUMMARY_IT = """# Changelog - Sommario Versioni
 
 Di seguito sono riassunti i titoli principali delle release. Il registro completo con tutti i dettagli tecnici è consultabile su GitHub.
 
+## v1.4.01
+* **Fix Risoluzione Accurata Primary Gateway con Nodi PoE e Mesh Misti (Issue #26)**
+* **Risoluzione Server DNS Personalizzati & Rimozione Fallback IP Sviluppatore (Issue #30)**
+* **Riconoscimento Dinamico Backhaul Wireless 6 GHz sui Nodi Mesh Wi-Fi 6E / Wi-Fi 7**
+* **Fix Risoluzione Bug Filtri di Frequenza Tabella Dispositivi (ReferenceError)**
+
 ---
 
 ## v1.4.0
@@ -481,6 +487,12 @@ Di seguito sono riassunti i titoli principali delle release. Il registro complet
 CHANGELOG_SUMMARY_EN = """# Changelog - Release Summary
 
 Below is a summary of the main release highlights. The complete changelog with all technical details is available on GitHub.
+
+## v1.4.01
+* **Fix Primary Gateway Resolution with PoE & Mixed Mesh Nodes (Issue #26)**
+* **Custom DNS Servers Extraction & Developer IP Fallback Removal (Issue #30)**
+* **Dynamic 6 GHz Wireless Backhaul Detection for Wi-Fi 6E / Wi-Fi 7 Mesh Nodes**
+* **Fix Device Table Frequency Band Filters (ReferenceError Resolution)**
 
 ---
 

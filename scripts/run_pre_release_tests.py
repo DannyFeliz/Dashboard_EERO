@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pre-Release Automated Test Suite - eero Custom Dashboard (v1.4.0)
+Pre-Release Automated Test Suite - eero Custom Dashboard (v1.4.01)
 ==================================================================
 Covers:
   1. Authentication & Demo Mode toggle with session token preservation
@@ -735,7 +735,7 @@ async def run_all_tests():
         runner.assert_true(check_res.status_code == 200, "Endpoint GET /api/system/update/check risponde HTTP 200")
         check_data = check_res.json()
         runner.assert_true(check_data.get("status") == "success", "Stato update check è 'success'")
-        runner.assert_true(check_data.get("current_version") == "1.4.0", f"Versione corrente rilevata è 1.4.0 (ottenuta: {check_data.get('current_version')})")
+        runner.assert_true(check_data.get("current_version") == "1.4.01", f"Versione corrente rilevata è 1.4.01 (ottenuta: {check_data.get('current_version')})")
         runner.assert_true("cli_command" in check_data, "Comando CLI assistito presente nel payload di update")
 
         # 2. Test Endpoint /api/system/update/trigger (modalità manuale/assistita in test env)
