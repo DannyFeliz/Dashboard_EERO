@@ -14,6 +14,11 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
   * **Fallback Consapevole dell'Hardware:** In assenza di metadati espliciti di frequenza nel payload REST dell'API cloud eero, il sistema riconosce i modelli hardware Wi-Fi 6E/7 (`eero Pro 6E`, `eero Max 7`) e imposta coerentemente il backhaul su `Wireless Mesh (6 GHz)` in linea con la negoziazione primaria di TrueMesh.
   * **Interfaccia & Stile UI:** Introdotto styling cromatico dedicato (`text-sky-600 dark:text-sky-400`) per evidenziare immediatamente i nodi con collegamento backhaul a 6 GHz.
 
+### 🔍 Fix Filtri Frequenze Elenco Dispositivi (6 GHz, 5 GHz, 2.4 GHz)
+* **🔍 Risolto Bug di Visualizzazione Vuota nei Filtri Banda:**
+  * Risolto il bug in `app.js` (`filteredDevices`) per cui selezionando i filtri di frequenza wireless (`6GHz`, `5GHz`, `2.4GHz`) la tabella dispositivi risultava vuota a causa della mancata dichiarazione della variabile di filtro `b` (ReferenceError).
+  * Rafforzato il matching di banda con l'ispezione delle frequenze MHz (`5900-7200 MHz`), canali PSC Wi-Fi 6E/7 e canali 2.4/5 GHz.
+
 ---
 
 ## [1.4.0] - 2026-09-12

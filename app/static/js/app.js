@@ -1064,12 +1064,32 @@ document.addEventListener('alpine:init', () => {
         
         // Filtro banda
         if (this.selectedBandFilter !== 'all') {
-          if (this.selectedBandFilter === 'wired') {
+          const b = this.selectedBandFilter;
+          if (b === 'wired') {
             if (d.connection_type !== 'wired' && d.wireless && d.frequency_band !== 'Cablato') return false;
           } else {
-            const is6G = Boolean(d.wireless_band === '6GHz' || d.frequency_band === '6 GHz' || d.frequency_band === '6GHz' || (d.channel > 177));
-            const is24G = Boolean(d.wireless_band === '2.4GHz' || d.frequency_band === '2.4 GHz' || d.frequency_band === '2.4GHz' || (d.channel >= 1 && d.channel <= 14 && !is6G));
-            const is5G = Boolean(!is6G && !is24G && (d.wireless_band === '5GHz' || d.frequency_band === '5 GHz' || d.frequency_band === '5GHz' || (d.channel >= 32 && d.channel <= 177)));
+            const is6G = Boolean(
+              d.wireless_band === '6GHz' || 
+              d.frequency_band === '6 GHz' || 
+              d.frequency_band === '6GHz' || 
+              (d.channel > 177) ||
+              (d.channel && [37, 53, 69, 85, 101, 117, 133, 181, 197, 213, 229].includes(d.channel)) ||
+              (d.frequency && d.frequency >= 5900 && d.frequency <= 7200)
+            );
+            const is24G = Boolean(
+              d.wireless_band === '2.4GHz' || 
+              d.frequency_band === '2.4 GHz' || 
+              d.frequency_band === '2.4GHz' || 
+              (d.channel >= 1 && d.channel <= 14 && !is6G) ||
+              (d.frequency && d.frequency >= 2400 && d.frequency <= 2500)
+            );
+            const is5G = Boolean(!is6G && !is24G && (
+              d.wireless_band === '5GHz' || 
+              d.frequency_band === '5 GHz' || 
+              d.frequency_band === '5GHz' || 
+              (d.channel >= 32 && d.channel <= 177) ||
+              (d.frequency && d.frequency >= 5000 && d.frequency < 5900)
+            ));
             
             let match = false;
             if (b === '6GHz') match = is6G;
