@@ -432,6 +432,12 @@ document.addEventListener('alpine:init', () => {
 
     formatNodeStatus(eero) {
       if (!eero) return '';
+      const isRebooting = ['rebooting', 'yellow'].includes(eero.status) || String(eero.state || '').toUpperCase() === 'REBOOTING';
+      if (isRebooting) {
+        const rebootLabel = this.currentLanguage === 'it' ? 'In Riavvio' : 'Rebooting';
+        const reconnLabel = this.currentLanguage === 'it' ? 'Riconnessione...' : 'Reconnecting...';
+        return `${rebootLabel} • ${reconnLabel}`;
+      }
       const isOnline = ['online', 'green'].includes(eero.status);
       const statusLabel = isOnline ? this.t('devices.status_online') : this.t('devices.status_offline');
       const healthLabel = isOnline 

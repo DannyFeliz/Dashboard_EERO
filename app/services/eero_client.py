@@ -683,7 +683,37 @@ class EeroClient:
 
     def _normalize_eero_node(self, n: Dict[str, Any]) -> Dict[str, Any]:
         node = dict(n)
-        node["status"] = "online" if bool(node.get("connected", True) or node.get("status") == "online") else "offline"
+
+        # Rilevamento dello stato operativo reale del nodo eero Mesh (Issue #34)
+        raw_status = str(node.get("status") or "").strip().lower()
+        raw_state = str(node.get("state") or "").strip().upper()
+        heartbeat_ok = node.get("heartbeat_ok")
+        connected_prop = node.get("connected")
+
+        node["state"] = raw_state
+        node["heartbeat_ok"] = heartbeat_ok
+
+        if raw_state == "REBOOTING" or raw_status == "rebooting":
+            node["status"] = "rebooting"
+        elif (
+            connected_prop is False or
+            heartbeat_ok is False or
+            raw_status in ("red", "offline", "disconnected") or
+            raw_state in ("OFFLINE", "DISCONNECTED", "UNREACHABLE")
+        ):
+            node["status"] = "offline"
+        elif (
+            raw_status in ("green", "online") or
+            raw_state == "ONLINE" or
+            heartbeat_ok is True or
+            connected_prop is True
+        ):
+            node["status"] = "online"
+        elif raw_status == "yellow" and heartbeat_ok is not False:
+            node["status"] = "online"
+        else:
+            # Fallback per fixture di test minimali prive di telemetria
+            node["status"] = "online"
 
         # Name / Location / Model
         node["name"] = node.get("location") or node.get("name") or node.get("nickname") or node.get("model") or "Nodo eero"

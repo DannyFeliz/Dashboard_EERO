@@ -625,7 +625,7 @@
               <div class="flex items-start justify-between">
                 <div>
                   <div class="flex items-center space-x-2">
-                    <span class="w-2.5 h-2.5 rounded-full" :class="['online', 'green'].includes(eero.status) ? 'bg-emerald-400' : 'bg-rose-500'"></span>
+                    <span class="w-2.5 h-2.5 rounded-full" :class="['online', 'green'].includes(eero.status) ? 'bg-emerald-400' : (['rebooting', 'yellow'].includes(eero.status) || String(eero.state || '').toUpperCase() === 'REBOOTING' ? 'bg-amber-400 animate-pulse' : 'bg-rose-500')"></span>
                     <h3 class="font-bold text-slate-900 dark:text-white text-base" x-text="eero.name"></h3>
                   </div>
                   <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5" x-show="eero.model" x-text="eero.model"></p>
@@ -655,7 +655,7 @@
                 <!-- Operating Status -->
                 <div class="flex justify-between text-slate-600 dark:text-slate-400" x-show="eero.status">
                   <span x-text="t('dashboard.status')"></span>
-                  <span class="text-emerald-600 dark:text-emerald-400 font-semibold" x-text="formatNodeStatus(eero)"></span>
+                  <span :class="['online', 'green'].includes(eero.status) ? 'text-emerald-600 dark:text-emerald-400' : (['rebooting', 'yellow'].includes(eero.status) || String(eero.state || '').toUpperCase() === 'REBOOTING' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400')" class="font-semibold" x-text="formatNodeStatus(eero)"></span>
                 </div>
                 <!-- Firmware OS Version -->
                 <div class="flex justify-between text-slate-600 dark:text-slate-400" x-show="eero.os_version">

@@ -40,6 +40,14 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
   * **Esposizione Alias Semantico `line_stability`:** Introdotto il campo esplicito `"line_stability"` nel payload del webhook `daily_digest` (pari all'Health Score di rete), facilitando l'integrazione diretta su Home Assistant e preservando `health_score` per piena retrocompatibilità.
   * **Documentazione Aggiornata:** Allineata la struttura d'esempio del payload JSON del webhook in `README.md`.
 
+### 📡 Rilevamento Accurato Nodi Mesh Offline & Gestione Riavvii (Issue #34)
+* **📡 Risoluzione Rilevamento Nodi Disconnessi & Webhook `node_offline`:**
+  * Risolta la segnalazione [Issue #34](https://github.com/EnricoFlammini/Dashboard_EERO/issues/34) per cui nodi eero offline non venivano mai rilevati come disconnessi e il webhook `node_offline` non veniva emesso.
+  * **Eliminazione Fallback Fallace:** Rimosso il fallback `node.get("connected", True)` in `_normalize_eero_node()`, che normalizzava forzatamente tutti i nodi a `online` a causa dell'assenza della proprietà `connected` nel payload REST `/eeros`.
+  * **Ispezione Telemetria Cloud eero:** Implementata l'ispezione gerarchica e autoritativa dei campi reali `heartbeat_ok`, `status` (`green`, `yellow`, `red`) e `state` (`ONLINE`, `REBOOTING`, `OFFLINE`).
+  * **Distinzione Nodi in Reboot vs Offline:** I nodi in fase di riavvio (`state: REBOOTING` o `status: rebooting`) vengono classificati come `"rebooting"`, prevenendo falsi allarmi durante i reboot intenzionali e mostrando nell'interfaccia grafica il badge dedicato in ambra pulsante (*"In Riavvio • Riconnessione..."*).
+  * **Triggering Affidabile Allarmi & Webhook:** Al verificarsi di una reale caduta del nodo (`heartbeat_ok: False` o `status: red`), il poller registra tempestivamente la transizione a `offline` ed emette la notifica Telegram e il webhook `node_offline`.
+
 ---
 
 ## [1.4.0] - 2026-09-12

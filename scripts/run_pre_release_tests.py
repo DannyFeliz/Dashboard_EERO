@@ -667,6 +667,45 @@ async def run_all_tests():
         runner.assert_true(res_default_dns.get("dns_servers") == ["192.168.1.1"], f"Fallback DNS usa gateway_ip di rete (ottenuto: {res_default_dns.get('dns_servers')})")
         runner.assert_true("192.168.4.104" not in res_default_dns.get("dns_servers"), "IP sviluppatore 192.168.4.104 assente da default DNS")
 
+        # Test 6: Rilevamento accurato nodi offline e rebooting (Issue #34)
+        node_healthy_raw = {
+            "id": "node_healthy",
+            "name": "Salotto Sano",
+            "status": "green",
+            "state": "ONLINE",
+            "heartbeat_ok": True
+        }
+        node_rebooting_raw = {
+            "id": "node_reboot",
+            "name": "Salotto In Riavvio",
+            "status": "yellow",
+            "state": "REBOOTING",
+            "heartbeat_ok": False
+        }
+        node_offline_red_raw = {
+            "id": "node_off_red",
+            "name": "Salotto Spento",
+            "status": "red",
+            "state": "OFFLINE",
+            "heartbeat_ok": False
+        }
+        node_offline_hb_raw = {
+            "id": "node_off_hb",
+            "name": "Salotto No Heartbeat",
+            "status": "yellow",
+            "state": "ONLINE",
+            "heartbeat_ok": False
+        }
+        norm_healthy = eero_client._normalize_eero_node(node_healthy_raw)
+        norm_reboot = eero_client._normalize_eero_node(node_rebooting_raw)
+        norm_off_red = eero_client._normalize_eero_node(node_offline_red_raw)
+        norm_off_hb = eero_client._normalize_eero_node(node_offline_hb_raw)
+
+        runner.assert_true(norm_healthy["status"] == "online", "Nodo sano con status='green', heartbeat_ok=True è 'online'")
+        runner.assert_true(norm_reboot["status"] == "rebooting", "Nodo con state='REBOOTING' è 'rebooting' (Issue #34)")
+        runner.assert_true(norm_off_red["status"] == "offline", "Nodo con status='red' è 'offline' (Issue #34)")
+        runner.assert_true(norm_off_hb["status"] == "offline", "Nodo con heartbeat_ok=False è 'offline' (Issue #34)")
+
         # =====================================================================
         # 11. TEST PRESERVAZIONE REGOLE ADGUARD HOME & MAPPING DESKTOP (Issue #21)
         # =====================================================================

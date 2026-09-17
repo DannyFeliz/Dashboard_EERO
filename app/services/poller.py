@@ -97,7 +97,7 @@ class BackgroundPoller:
         mesh_issues = []
         mesh_issues_en = []
 
-        offline_nodes = [e for e in eeros if e.get("status") not in ("online", "green")]
+        offline_nodes = [e for e in eeros if e.get("status") not in ("online", "green", "rebooting")]
         if offline_nodes:
             deduction = len(offline_nodes) * 20
             mesh_score = max(0, mesh_score - deduction)
@@ -765,13 +765,15 @@ class BackgroundPoller:
                 if wireless_samples:
                     asyncio.create_task(db_service.record_device_signal_samples(wireless_samples, is_demo=0))
 
-            # Rilevamento nodi eero offline
+            # Rilevamento nodi eero offline (Issue #34)
             for node in eeros:
                 node_id = str(node.get("id") or node.get("serial"))
-                status = "online" if node.get("status") in ("online", "green") else "offline"
+                node_status = str(node.get("status") or "").lower()
+                status = "online" if node_status in ("online", "green") else ("rebooting" if node_status == "rebooting" else "offline")
                 if node_id in self._known_eeros_status:
                     prev_status = self._known_eeros_status[node_id]
-                    if prev_status == "online" and status != "online":
+                    # Allarme disconnessione solo per cadute impreviste (non per riavvii intenzionali)
+                    if prev_status == "online" and status == "offline":
                         asyncio.create_task(notification_service.notify_node_offline(node))
                 self._known_eeros_status[node_id] = status
 
@@ -888,7 +890,7 @@ class BackgroundPoller:
 
             # Informazioni sui nodi mesh
             total_nodes = len(self.cached_eeros)
-            online_nodes = sum(1 for e in self.cached_eeros if e.get("connected") or e.get("status") in ("connected", "online"))
+            online_nodes = sum(1 for e in self.cached_eeros if e.get("status") in ("online", "green"))
             
             # Informazioni WAN e Speedtest Gateway
             net = self.cached_network or {}
