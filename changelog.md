@@ -48,6 +48,14 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
   * **Distinzione Nodi in Reboot vs Offline:** I nodi in fase di riavvio (`state: REBOOTING` o `status: rebooting`) vengono classificati come `"rebooting"`, prevenendo falsi allarmi durante i reboot intenzionali e mostrando nell'interfaccia grafica il badge dedicato in ambra pulsante (*"In Riavvio • Riconnessione..."*).
   * **Triggering Affidabile Allarmi & Webhook:** Al verificarsi di una reale caduta del nodo (`heartbeat_ok: False` o `status: red`), il poller registra tempestivamente la transizione a `offline` ed emette la notifica Telegram e il webhook `node_offline`.
 
+### ⚡ Prevenzione Infiltrazione Dati Mock TIM nello Storico Speedtest (Issue #35)
+* **⚡ Blocco Telemetria Demo e Isolamento Dati WAN Reali:**
+  * Risolta la segnalazione [Issue #35](https://github.com/EnricoFlammini/Dashboard_EERO/issues/35) per cui in condizioni di glitch transitorio dell'API cloud eero (timeout, rate limit HTTP 429, 502/503), venivano registrati nello storico delle prestazioni i valori demo hardcoded dell'ISP italiano (`TIM FTTH 1Gbps / 300Mbps`, `912.45 Mbps` download, `298.10 Mbps` upload).
+  * **Eliminazione Fallback Demo in Sessioni Autenticate:** Modificato `EeroClient` in modo che `get_network_details()`, `get_eeros()` e `fetch_account_info()` mantengano in cache l'ultimo stato noto reale (`_last_network_details`, `_last_eeros`) anziché restituire i dati mock/demo quando l'utente è autenticato.
+  * **Filtro di Validazione Poller:** Aggiunta una guardia esplicita nel ciclo di polling (`poller.py`) che scarta qualsiasi telemetria speedtest corrispondente ai profili mock (`TIM FTTH` o `912.45 / 298.10`) se non si è in modalità demo attiva, prevenendone la scrittura sul database SQLite.
+  * **Rimozione Fallback Sintetici in `SpeedtestService`:** Eliminati i valori cablati di throughput (`969.9 / 193.2`) e il fallback su provider sintetici (`Wind Tre` / `Fastweb`) durante le sessioni autenticate: in caso di anomalia temporanea delle API eero il test fallisce in modo pulito e tracciato, senza inquinare lo storico con dati fittizi.
+  * **Purge Automatico Record Anomali dal Database:** Aggiornata la routine di avvio `purge_all_mock_data()` in `db.py` per ripulire retroattivamente e automaticamente dal database SQLite qualsiasi record orfano contenente dati demo (`TIM FTTH`, `Fastweb / Wind Tre`, `912.45 / 298.10 Mbps`).
+
 ---
 
 ## [1.4.0] - 2026-09-12

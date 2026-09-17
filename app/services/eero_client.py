@@ -190,6 +190,8 @@ class EeroClient:
         self.current_gateway_url: Optional[str] = None
         self.current_gateway_name: Optional[str] = None
         self.current_gateway_ip: Optional[str] = None
+        self._last_network_details: Optional[Dict[str, Any]] = None
+        self._last_eeros: Optional[List[Dict[str, Any]]] = None
         self._is_demo_active: bool = False
         self._http_client: Optional[httpx.AsyncClient] = None
         self.load_session()
@@ -429,7 +431,7 @@ class EeroClient:
             
             if resp.status_code != 200:
                 logger.error(f"Failed to fetch account info ({resp.status_code}): {resp.text}")
-                return self._get_demo_account()
+                return self.account_info or {}
 
             data = resp.json().get("data", {})
             self.account_info = data
@@ -1543,14 +1545,16 @@ class EeroClient:
             await self.fetch_account_info()
 
         if not self.current_network_id:
-            return self._get_demo_network_details()
+            return self._last_network_details or {}
 
         async with self._client_session() as client:
             resp = await client.get(f"{EERO_API_BASE}/networks/{self.current_network_id}", headers=self._get_headers())
             if resp.status_code != 200:
                 logger.error(f"Error fetching network details: {resp.status_code} {resp.text}")
-                return self._get_demo_network_details()
-            return self._normalize_network_details(resp.json().get("data", {}))
+                return self._last_network_details or {}
+            norm = self._normalize_network_details(resp.json().get("data", {}))
+            self._last_network_details = norm
+            return norm
 
     async def get_eeros(self) -> List[Dict[str, Any]]:
         """Recupera la lista e i dettagli di tutti i nodi eero mesh (Gateway & Beacon)."""
@@ -1561,13 +1565,13 @@ class EeroClient:
             await self.fetch_account_info()
 
         if not self.current_network_id:
-            return self._get_demo_eeros()
+            return self._last_eeros or []
 
         async with self._client_session() as client:
             resp = await client.get(f"{EERO_API_BASE}/networks/{self.current_network_id}/eeros", headers=self._get_headers())
             if resp.status_code != 200:
                 logger.error(f"Error fetching eeros: {resp.status_code} {resp.text}")
-                return self._get_demo_eeros()
+                return self._last_eeros or []
             raw_list = resp.json().get("data", [])
             nodes = []
             for n in raw_list:
@@ -1632,6 +1636,7 @@ class EeroClient:
                                 n["wired"] = False
                                 n["backhaul_type"] = "Wireless Mesh (5 GHz)"
 
+            self._last_eeros = nodes
             return nodes
 
     async def get_devices(self) -> List[Dict[str, Any]]:

@@ -1026,6 +1026,76 @@ async def run_all_tests():
         runner.assert_true(client_id1 == client_id2, "Istanza httpx.AsyncClient riutilizzata nel pool (Keep-Alive attivo)")
         runner.assert_true(not eero_client._http_client.is_closed, "Client HTTP aperto e pronto per nuove richieste nel pool")
 
+        # =====================================================================
+        # 16. TEST ISOLAMENTO SPEEDTEST & PREVENZIONE LEAK MOCK TIM (Issue #35)
+        # =====================================================================
+        print("\n⚡ [16/16] TEST ISOLAMENTO SPEEDTEST & PREVENZIONE LEAK MOCK TIM (Issue #35)")
+        from app.services.speedtest_service import speedtest_service
+
+        # 1. Verifica che in sessione autenticata un errore API non restituisca dati demo TIM
+        orig_token = eero_client.user_token
+        orig_net_id = eero_client.current_network_id
+        orig_cache_net = eero_client._last_network_details
+        orig_cache_eeros = eero_client._last_eeros
+
+        try:
+            eero_client.user_token = "live_token_test_abc"
+            eero_client.current_network_id = "invalid_network_test_id"
+            eero_client._last_network_details = {"network_name": "Cached Live Network", "isp": "Virgin Media UK"}
+            eero_client._last_eeros = [{"name": "Living Room", "is_gateway": True}]
+
+            # get_network_details() in caso di errore HTTP (es. 400 Bad Request) deve ritornare la cache reale, MAI i dati demo TIM
+            res_net = await eero_client.get_network_details()
+            runner.assert_true("TIM FTTH" not in str(res_net.get("isp", "")), "get_network_details() non restituisce 'TIM FTTH' su errore API autenticata")
+            runner.assert_true(res_net.get("network_name") == "Cached Live Network", "get_network_details() preserva l'ultimo stato noto")
+
+            # get_eeros() in caso di errore HTTP deve ritornare _last_eeros, MAI i nodi demo
+            res_eeros = await eero_client.get_eeros()
+            runner.assert_true(len(res_eeros) == 1 and res_eeros[0].get("name") == "Living Room", "get_eeros() preserva l'ultimo stato noto senza ricadere nei nodi demo")
+
+            # 2. Verifica purge_all_mock_data() su SQLite
+            sp_mock_id = await db_service.save_speedtest(
+                download_mbps=912.45,
+                upload_mbps=298.10,
+                ping_ms=9.2,
+                server_name="TIM FTTH 1Gbps / 300Mbps (WAN SpeedTest)",
+                source="eero_gateway"
+            )
+            sp_real_id = await db_service.save_speedtest(
+                download_mbps=1140.50,
+                upload_mbps=105.20,
+                ping_ms=14.1,
+                server_name="Virgin Media (WAN SpeedTest)",
+                source="eero_gateway"
+            )
+
+            # Esecuzione pulizia
+            await db_service.purge_all_mock_data()
+
+            # Verifichiamo che il record TIM sia stato eliminato e il record Virgin Media sia preservato
+            all_sp = await db_service.get_speedtests(limit=50)
+            mock_found = any(s.get("id") == sp_mock_id or abs(float(s.get("download_mbps", 0)) - 912.45) < 0.01 for s in all_sp)
+            real_found = any(s.get("id") == sp_real_id for s in all_sp)
+            runner.assert_true(not mock_found, "Record mock TIM 912.45/298.10 eliminato dal database SQLite da purge_all_mock_data()")
+            runner.assert_true(real_found, "Record reale utente preservato intatto nel database SQLite")
+
+            # 3. Verifica che speedtest_service fallisca in modo pulito senza salvare fallback sintetici
+            eero_client.current_network_id = "invalid_network_test_id"
+            threw_exception = False
+            try:
+                await speedtest_service.run_speedtest()
+            except Exception:
+                threw_exception = True
+            runner.assert_true(threw_exception, "speedtest_service solleva eccezione pulita su errore API anziché generare fallback sintetici")
+            runner.assert_true(speedtest_service.is_running is False, "speedtest_service resetta il flag is_running a False")
+
+        finally:
+            # Ripristina client eero
+            eero_client.user_token = orig_token
+            eero_client.current_network_id = orig_net_id
+            eero_client._last_network_details = orig_cache_net
+            eero_client._last_eeros = orig_cache_eeros
+
     runner.print_summary()
 
 

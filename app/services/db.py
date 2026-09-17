@@ -184,7 +184,15 @@ class DBService:
         """Elimina completamente tutti i dati mock/demo dai record speedtest."""
         try:
             async with self.get_connection() as db:
-                await db.execute("DELETE FROM speedtests WHERE server_name LIKE '%Fastweb Milan%' OR server_name LIKE '%Demo%' OR server_name LIKE '%synthetics%';")
+                await db.execute("""
+                    DELETE FROM speedtests 
+                    WHERE server_name LIKE '%Fastweb Milan%' 
+                       OR server_name LIKE '%Demo%' 
+                       OR server_name LIKE '%synthetics%'
+                       OR server_name LIKE '%Fastweb / Wind Tre%'
+                       OR server_name LIKE '%TIM FTTH%'
+                       OR (ROUND(download_mbps, 2) = 912.45 AND ROUND(upload_mbps, 2) = 298.10);
+                """)
                 await db.commit()
                 logger.info("Purged all demo/mock speedtest records from SQLite.")
         except Exception as e:

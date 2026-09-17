@@ -783,37 +783,49 @@ class BackgroundPoller:
             self.cached_health_details = health_details
 
             # 5. Aggiornamento Cache RAM
-            self.cached_network = network_details
-            self.cached_eeros = eeros
-            self.cached_devices = enriched_devices
-            self.cached_profiles = profiles
+            if network_details:
+                self.cached_network = network_details
+            if eeros or not self.cached_eeros:
+                self.cached_eeros = eeros
+            if enriched_devices or not self.cached_devices:
+                self.cached_devices = enriched_devices
+            if profiles or not self.cached_profiles:
+                self.cached_profiles = profiles
             self._last_poll_time = datetime.now(timezone.utc)
 
             # 6. Sincronizzazione automatica Speed Test reale da eero Gateway
-            sp = network_details.get("speedtest")
+            sp = network_details.get("speedtest") if isinstance(network_details, dict) else None
             if sp and isinstance(sp, dict) and sp.get("download_mbps"):
                 down_val = round(float(sp["download_mbps"]), 2)
                 up_val = round(float(sp.get("upload_mbps", 0)), 2)
                 ping_val = round(float(sp.get("ping_ms", 0)), 1)
                 
-                history_sp = await db_service.get_speedtests(limit=1)
-                should_save = False
-                if not history_sp:
-                    should_save = True
+                is_mock_test = (
+                    (abs(down_val - 912.45) < 0.05 and abs(up_val - 298.10) < 0.05) or
+                    "TIM FTTH" in str(network_details.get("isp", ""))
+                )
+                if is_mock_test and not getattr(eero_client, "is_demo_mode", False) and not (getattr(eero_client, "user_token", "") or "").startswith("demo_"):
+                    # Discard mock/demo speedtest telemetry leaking into authenticated session
+                    should_save = False
                 else:
-                    latest = history_sp[0]
-                    # Se l'ultimo test registrato ha valori diversi
-                    if abs(float(latest.get("download_mbps", 0)) - down_val) > 2.0 or abs(float(latest.get("upload_mbps", 0)) - up_val) > 2.0:
+                    history_sp = await db_service.get_speedtests(limit=1)
+                    should_save = False
+                    if not history_sp:
                         should_save = True
-                
-                if should_save:
-                    await db_service.save_speedtest(
-                        download_mbps=down_val,
-                        upload_mbps=up_val,
-                        ping_ms=ping_val,
-                        server_name=f"{network_details.get('isp', 'eero Gateway')} (WAN SpeedTest)",
-                        source="eero_gateway"
-                    )
+                    else:
+                        latest = history_sp[0]
+                        # Se l'ultimo test registrato ha valori diversi
+                        if abs(float(latest.get("download_mbps", 0)) - down_val) > 2.0 or abs(float(latest.get("upload_mbps", 0)) - up_val) > 2.0:
+                            should_save = True
+                    
+                    if should_save:
+                        await db_service.save_speedtest(
+                            download_mbps=down_val,
+                            upload_mbps=up_val,
+                            ping_ms=ping_val,
+                            server_name=f"{network_details.get('isp', 'eero Gateway')} (WAN SpeedTest)",
+                            source="eero_gateway"
+                        )
 
         except Exception as e:
             logger.error(f"Errore durante il salvataggio delle metriche di rete: {e}")
@@ -858,7 +870,12 @@ class BackgroundPoller:
         if speedtest_hours > 0:
             if not self._last_scheduled_speedtest or (now - self._last_scheduled_speedtest).total_seconds() > (speedtest_hours * 3600):
                 self._last_scheduled_speedtest = now
-                asyncio.create_task(speedtest_service.run_speedtest())
+                async def _safe_scheduled_speedtest():
+                    try:
+                        await speedtest_service.run_speedtest()
+                    except Exception as err:
+                        logger.warning(f"Scheduled speedtest failed: {err}")
+                asyncio.create_task(_safe_scheduled_speedtest())
 
         # D. Daily Digest (ore 21:00)
         today_str = now.strftime("%Y-%m-%d")
