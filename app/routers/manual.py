@@ -370,6 +370,9 @@ Di seguito sono riassunti i titoli principali delle release. Il registro complet
 * **Risoluzione Server DNS Personalizzati & Rimozione Fallback IP Sviluppatore (Issue #30)**
 * **Riconoscimento Dinamico Backhaul Wireless 6 GHz sui Nodi Mesh Wi-Fi 6E / Wi-Fi 7**
 * **Fix Risoluzione Bug Filtri di Frequenza Tabella Dispositivi (ReferenceError)**
+* **Allineamento Metriche Daily Digest & Esposizione Campo `line_stability` nei Webhook (Issue #32)**
+* **Rilevamento Accurato Nodi Mesh Offline & Distinzione Nodi in Fase di Riavvio (Issue #34)**
+* **Prevenzione Infiltrazione Dati Mock TIM nello Storico Speedtest & Purge SQLite (Issue #35)**
 
 ---
 
@@ -493,6 +496,9 @@ Below is a summary of the main release highlights. The complete changelog with a
 * **Custom DNS Servers Extraction & Developer IP Fallback Removal (Issue #30)**
 * **Dynamic 6 GHz Wireless Backhaul Detection for Wi-Fi 6E / Wi-Fi 7 Mesh Nodes**
 * **Fix Device Table Frequency Band Filters (ReferenceError Resolution)**
+* **Align Daily Digest Metrics & Expose `line_stability` in Webhook Payload (Issue #32)**
+* **Accurate Mesh Offline Node Detection & Rebooting State Differentiation (Issue #34)**
+* **Prevent Mock TIM Telemetry Leakage into Performance History & SQLite Purge (Issue #35)**
 
 ---
 
