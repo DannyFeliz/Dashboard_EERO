@@ -902,6 +902,7 @@ class BackgroundPoller:
             digest_payload = {
                 "network_name": network_name,
                 "health_score": health_score,
+                "line_stability": health_score,
                 "isp": isp_name,
                 "active_devices_count": total_active,
                 "count_6ghz": count_6ghz,

@@ -264,7 +264,7 @@
     "webhook_url": "Webhook HTTP URL (Opzionale):",
     "save_notifications": "Salva Canali di Allarme",
     "digest_title": "Report Digest Giornaliero",
-    "digest_desc": "Invia automaticamente alle 21:00 il riepilogo con consumo totale in GB, dispositivo top consumer e stabilità della linea.",
+    "digest_desc": "Invia automaticamente alle 21:00 il riepilogo con salute e stabilità della linea, dispositivi attivi per banda Wi-Fi, nodi mesh e velocità WAN.",
     "digest_enable_toggle": "Abilita invio automatico programmato (ore 21:00)",
     "digest_btn": "Genera & Invia Digest Ora",
     "gaming_title": "Gaming & Focus Mode (Bassa Latenza)",

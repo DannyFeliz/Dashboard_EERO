@@ -211,18 +211,28 @@ Triggered when an eero Beacon or Gateway drops offline:
 ```
 
 #### 3. `daily_digest` (Daily Network Health Summary)
-Sent daily with WAN performance, latency averages, and active device counts:
+Sent daily at 21:00 (or triggered on-demand) with network health score, line stability, active client breakdown by frequency band, mesh node status, and gateway WAN performance:
 ```json
 {
   "event": "daily_digest",
-  "timestamp": "2026-08-28T09:00:00Z",
+  "timestamp": "2026-09-17T21:00:00Z",
   "source": "eero_custom_dashboard",
   "data": {
-    "avg_download_mbps": 842.5,
-    "avg_upload_mbps": 110.2,
-    "avg_ping_ms": 11.4,
-    "total_devices_seen": 34,
-    "nodes_online": 3
+    "network_name": "Home Mesh",
+    "health_score": 100,
+    "line_stability": 100,
+    "isp": "Fastweb",
+    "active_devices_count": 28,
+    "count_6ghz": 2,
+    "count_5ghz": 14,
+    "count_24ghz": 8,
+    "count_wired": 4,
+    "online_nodes": 3,
+    "total_nodes": 3,
+    "wan_down": 842.5,
+    "wan_up": 110.2,
+    "wan_ping": 11.4,
+    "timestamp": "2026-09-17T19:00:00.000000+00:00"
   }
 }
 ```
@@ -436,7 +446,7 @@ Quando viene impostata la variabile `WEBHOOK_URL` in `.env` (o tramite il pannel
 
 * **`new_device` (Rilevamento Nuovo Dispositivo):** Inviato istantaneamente quando un dispositivo si collega per la prima volta. Contiene `hostname`, `ip`, `mac`, frequenza Wi-Fi e nodo eero di connessione.
 * **`node_offline` (Nodo Mesh Disconnesso):** Inviato quando un Beacon o il Gateway perde la connessione.
-* **`daily_digest` (Report Giornaliero):** Inviato ogni 24 ore con medie di download, upload, latenza (ping) e conteggio dispositivi.
+* **`daily_digest` (Report Giornaliero):** Inviato alle 21:00 (o su richiesta) con salute/stabilità della linea (`health_score`, `line_stability`), ripartizione dispositivi per banda Wi-Fi (6 GHz, 5 GHz, 2.4 GHz, cablati), stato nodi mesh e velocità WAN/ping del gateway.
 
 ### Sincronizzazione Nomi Dispositivi con AdGuard Home & Pi-hole
 

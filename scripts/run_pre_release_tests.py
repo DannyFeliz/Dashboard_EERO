@@ -137,6 +137,7 @@ async def run_all_tests():
         digest_res = res.json()
         runner.assert_true(digest_res.get("status") == "success", "Generazione Daily Digest completata")
         runner.assert_true(digest_res.get("data", {}).get("health_score", 0) > 0, "Health score presente nel digest")
+        runner.assert_true(digest_res.get("data", {}).get("line_stability", 0) > 0, "Line stability presente nel digest (Issue #32)")
 
         print("\n📄 [4/6] TEST ESPORTAZIONE DISPOSITIVI (/etc/hosts & AdGuard JSON)")
         res = await client.get("/api/devices/export/hosts")

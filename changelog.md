@@ -33,6 +33,13 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
   * Risolto il bug in `app.js` (`filteredDevices`) per cui selezionando i filtri di frequenza wireless (`6GHz`, `5GHz`, `2.4GHz`) la tabella dispositivi risultava vuota a causa della mancata dichiarazione della variabile di filtro `b` (ReferenceError).
   * Rafforzato il matching di banda con l'ispezione delle frequenze MHz (`5900-7200 MHz`), canali PSC Wi-Fi 6E/7 e canali 2.4/5 GHz.
 
+### 📊 Allineamento Descrizione & Payload Webhook Daily Digest (Issue #32)
+* **📊 Correzione Testo Descrittivo ed Esposizione Metriche Stabilità Rete:**
+  * Risolta la segnalazione [Issue #32](https://github.com/EnricoFlammini/Dashboard_EERO/issues/32) in cui la card del Report Digest Giornaliero riportava una descrizione non allineata ai dati effettivamente inviati via Webhook e Telegram.
+  * **Allineamento Stringhe UI (IT & EN):** Aggiornate le traduzioni in `it.json` ed `en.json` per riflettere con precisione le metriche reali generate dal digest: salute e stabilità della linea, ripartizione dei client connessi per banda Wi-Fi (6 GHz, 5 GHz, 2.4 GHz, cablati), stato nodi mesh e velocità WAN/latenza gateway.
+  * **Esposizione Alias Semantico `line_stability`:** Introdotto il campo esplicito `"line_stability"` nel payload del webhook `daily_digest` (pari all'Health Score di rete), facilitando l'integrazione diretta su Home Assistant e preservando `health_score` per piena retrocompatibilità.
+  * **Documentazione Aggiornata:** Allineata la struttura d'esempio del payload JSON del webhook in `README.md`.
+
 ---
 
 ## [1.4.0] - 2026-09-12

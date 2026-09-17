@@ -264,7 +264,7 @@
     "webhook_url": "Webhook HTTP URL (Optional):",
     "save_notifications": "Save Alert Channels",
     "digest_title": "Daily Digest Report",
-    "digest_desc": "Automatically sends a summary at 21:00 with total GB consumed, top hog client and line stability.",
+    "digest_desc": "Automatically sends a summary at 21:00 with network health and line stability, active devices by Wi-Fi band, mesh node status, and gateway WAN speed.",
     "digest_enable_toggle": "Enable automated scheduled dispatch (at 21:00)",
     "digest_btn": "Generate & Send Digest Now",
     "gaming_title": "Gaming & Focus Mode (Low Latency)",
