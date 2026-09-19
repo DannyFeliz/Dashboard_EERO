@@ -153,23 +153,28 @@ async def get_network_distribution() -> Dict[str, Any]:
         active_devices = [d for d in devices if d.get("connected")]
         active_count = len(active_devices)
 
+        def _get_device_display_name(dev: Dict[str, Any]) -> str:
+            return str(dev.get("custom_name") or dev.get("nickname") or dev.get("hostname") or dev.get("ip") or dev.get("mac") or "Dispositivo").strip()
+
         # 1. Distribuzione Frequenze (su client attivi)
-        freq_counts = {"6 GHz": 0, "5 GHz": 0, "2.4 GHz": 0, "Ethernet": 0}
+        freq_map: Dict[str, List[str]] = {"6 GHz": [], "5 GHz": [], "2.4 GHz": [], "Ethernet": []}
         for d in active_devices:
+            d_name = _get_device_display_name(d)
             band = str(d.get("wireless_band") or d.get("frequency_band") or "").strip()
             if "6" in band:
-                freq_counts["6 GHz"] += 1
+                freq_map["6 GHz"].append(d_name)
             elif "5" in band:
-                freq_counts["5 GHz"] += 1
+                freq_map["5 GHz"].append(d_name)
             elif "2.4" in band or "2" in band:
-                freq_counts["2.4 GHz"] += 1
+                freq_map["2.4 GHz"].append(d_name)
             else:
-                freq_counts["Ethernet"] += 1
+                freq_map["Ethernet"].append(d_name)
 
         freq_list = []
-        for f_name, f_cnt in freq_counts.items():
+        for f_name, f_devs in freq_map.items():
+            f_cnt = len(f_devs)
             pct = round((f_cnt / active_count * 100.0), 1) if active_count > 0 else 0.0
-            freq_list.append({"band": f_name, "count": f_cnt, "percentage": pct})
+            freq_list.append({"band": f_name, "count": f_cnt, "percentage": pct, "devices": f_devs})
 
         # 2. Carico per Nodo Mesh (su client attivi)
         node_map: Dict[str, Dict[str, Any]] = {}
@@ -182,56 +187,70 @@ async def get_network_distribution() -> Dict[str, Any]:
                 "is_gateway": bool(e.get("is_gateway")),
                 "model": e.get("model") or "eero",
                 "client_count": 0,
-                "percentage": 0.0
+                "percentage": 0.0,
+                "devices": []
             }
 
-        unassigned_count = 0
+        unassigned_devices: List[str] = []
         for d in active_devices:
-            src_name = d.get("source_name") or d.get("connected_eero_name") or ""
+            d_name = _get_device_display_name(d)
+            src_name = (d.get("connected_eero_name") or d.get("source_name") or "").strip().lower()
+            src_id = str(d.get("connected_eero_id") or "").strip()
+
             matched = False
-            for n_name in node_map:
-                if src_name and src_name.lower() in n_name.lower() or n_name.lower() in src_name.lower():
-                    node_map[n_name]["client_count"] += 1
+            for n_name, n_info in node_map.items():
+                target_name = n_name.lower()
+                target_id = n_info["id"]
+                if (src_id and src_id == target_id) or (src_name and (src_name in target_name or target_name in src_name)):
+                    n_info["devices"].append(d_name)
                     matched = True
                     break
             if not matched:
-                unassigned_count += 1
+                unassigned_devices.append(d_name)
 
-        if unassigned_count > 0 and node_map:
-            # Assegna al gateway o al primo nodo
+        if unassigned_devices and node_map:
             first_node = next((n for n in node_map.values() if n["is_gateway"]), list(node_map.values())[0])
-            first_node["client_count"] += unassigned_count
+            first_node["devices"].extend(unassigned_devices)
 
         node_list = []
         for n in node_map.values():
+            n["client_count"] = len(n["devices"])
             n["percentage"] = round((n["client_count"] / active_count * 100.0), 1) if active_count > 0 else 0.0
             node_list.append(n)
         node_list.sort(key=lambda x: x["client_count"], reverse=True)
 
         # 3. Categorie Dispositivi (su tutti i dispositivi noti)
-        cat_counts: Dict[str, int] = {}
+        cat_map: Dict[str, List[str]] = {}
         for d in devices:
+            d_name = _get_device_display_name(d)
             cat = str(d.get("category") or d.get("device_category") or "Altro").strip()
-            cat_counts[cat] = cat_counts.get(cat, 0) + 1
+            if cat not in cat_map:
+                cat_map[cat] = []
+            cat_map[cat].append(d_name)
 
         cat_list = []
-        for c_name, c_cnt in sorted(cat_counts.items(), key=lambda x: x[1], reverse=True):
+        for c_name, c_devs in sorted(cat_map.items(), key=lambda x: len(x[1]), reverse=True):
+            c_cnt = len(c_devs)
             pct = round((c_cnt / total_devices * 100.0), 1) if total_devices > 0 else 0.0
-            cat_list.append({"category": c_name, "count": c_cnt, "percentage": pct})
+            cat_list.append({"category": c_name, "count": c_cnt, "percentage": pct, "devices": c_devs})
 
         # 4. Top Vendor Hardware
-        vendor_counts: Dict[str, int] = {}
+        vendor_map: Dict[str, List[str]] = {}
         for d in devices:
+            d_name = _get_device_display_name(d)
             v = _resolve_vendor_from_mac_and_name(
                 str(d.get("mac") or d.get("mac_address") or ""),
                 str(d.get("hostname") or d.get("nickname") or "")
             )
-            vendor_counts[v] = vendor_counts.get(v, 0) + 1
+            if v not in vendor_map:
+                vendor_map[v] = []
+            vendor_map[v].append(d_name)
 
         vendor_list = []
-        for v_name, v_cnt in sorted(vendor_counts.items(), key=lambda x: x[1], reverse=True):
+        for v_name, v_devs in sorted(vendor_map.items(), key=lambda x: len(x[1]), reverse=True):
+            v_cnt = len(v_devs)
             pct = round((v_cnt / total_devices * 100.0), 1) if total_devices > 0 else 0.0
-            vendor_list.append({"vendor": v_name, "count": v_cnt, "percentage": pct})
+            vendor_list.append({"vendor": v_name, "count": v_cnt, "percentage": pct, "devices": v_devs})
 
         return {
             "status": "success",

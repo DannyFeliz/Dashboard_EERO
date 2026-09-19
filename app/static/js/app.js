@@ -446,7 +446,7 @@ document.addEventListener('alpine:init', () => {
               }
             });
           }
-          if (chart.options?.plugins?.tooltip) {
+          if (chart.options?.plugins?.tooltip && !chart.options.plugins.tooltip._customDark) {
             chart.options.plugins.tooltip.backgroundColor = colors.tooltipBg;
             chart.options.plugins.tooltip.titleColor = colors.tooltipTitle;
             chart.options.plugins.tooltip.bodyColor = colors.tooltipBody;
@@ -3342,6 +3342,19 @@ document.addEventListener('alpine:init', () => {
       this.renderSlaChart();
     },
 
+    formatDevicesTooltipAfterBody(devicesList) {
+      if (!devicesList || devicesList.length === 0) return [];
+      const isIt = this.currentLanguage === 'it';
+      const header = (isIt ? 'Dispositivi (' : 'Devices (') + devicesList.length + '):';
+      const lines = ['', header];
+      const maxShow = 15;
+      devicesList.slice(0, maxShow).forEach(d => lines.push(`  • ${d}`));
+      if (devicesList.length > maxShow) {
+        lines.push(isIt ? `  ... e altri ${devicesList.length - maxShow}` : `  ... and ${devicesList.length - maxShow} more`);
+      }
+      return lines;
+    },
+
     renderFrequenciesChart() {
       try {
         const canvas = document.getElementById('analyticsFrequenciesChart');
@@ -3360,6 +3373,7 @@ document.addEventListener('alpine:init', () => {
         const labels = freqs.map(f => f.band);
         const data = freqs.map(f => f.count);
         const colors = this.getChartThemeColors();
+        const isIt = this.currentLanguage === 'it';
 
         this.analyticsChartInstances['frequencies'] = new Chart(canvas, {
           type: 'doughnut',
@@ -3390,6 +3404,31 @@ document.addEventListener('alpine:init', () => {
                   boxWidth: 12,
                   padding: 12
                 }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.96)',
+                titleColor: '#ffffff',
+                titleFont: { family: colors.fontFamily, weight: 'bold', size: 13 },
+                bodyColor: '#e2e8f0',
+                bodyFont: { family: colors.fontFamily, size: 12 },
+                borderColor: 'rgba(255, 255, 255, 0.15)',
+                borderWidth: 1,
+                padding: 10,
+                boxPadding: 4,
+                cornerRadius: 8,
+                _customDark: true,
+                callbacks: {
+                  label: (ctx) => {
+                    const count = ctx.raw || 0;
+                    const pct = freqs[ctx.dataIndex]?.percentage || 0;
+                    return (isIt ? ' Client Connessi: ' : ' Connected Clients: ') + `${count} (${pct}%)`;
+                  },
+                  afterBody: (items) => {
+                    if (!items || items.length === 0) return [];
+                    const item = freqs[items[0].dataIndex];
+                    return this.formatDevicesTooltipAfterBody(item ? item.devices : []);
+                  }
+                }
               }
             },
             cutout: '65%'
@@ -3418,13 +3457,14 @@ document.addEventListener('alpine:init', () => {
         const labels = nodes.map(n => n.name);
         const data = nodes.map(n => n.client_count);
         const colors = this.getChartThemeColors();
+        const isIt = this.currentLanguage === 'it';
 
         this.analyticsChartInstances['nodeLoad'] = new Chart(canvas, {
           type: 'bar',
           data: {
             labels: labels,
             datasets: [{
-              label: 'Client Connessi',
+              label: isIt ? 'Client Connessi' : 'Connected Clients',
               data: data,
               backgroundColor: 'rgba(0, 103, 192, 0.8)',
               borderColor: '#0067c0',
@@ -3438,7 +3478,31 @@ document.addEventListener('alpine:init', () => {
             maintainAspectRatio: false,
             animation: false,
             plugins: {
-              legend: { display: false }
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.96)',
+                titleColor: '#ffffff',
+                titleFont: { family: colors.fontFamily, weight: 'bold', size: 13 },
+                bodyColor: '#e2e8f0',
+                bodyFont: { family: colors.fontFamily, size: 12 },
+                borderColor: 'rgba(255, 255, 255, 0.15)',
+                borderWidth: 1,
+                padding: 10,
+                boxPadding: 4,
+                cornerRadius: 8,
+                _customDark: true,
+                callbacks: {
+                  label: (ctx) => {
+                    const val = ctx.parsed.x !== undefined ? ctx.parsed.x : ctx.raw;
+                    return (isIt ? 'Client Connessi: ' : 'Connected Clients: ') + val;
+                  },
+                  afterBody: (items) => {
+                    if (!items || items.length === 0) return [];
+                    const node = nodes[items[0].dataIndex];
+                    return this.formatDevicesTooltipAfterBody(node ? node.devices : []);
+                  }
+                }
+              }
             },
             scales: {
               x: {
@@ -3476,6 +3540,7 @@ document.addEventListener('alpine:init', () => {
         const labels = cats.map(c => c.category);
         const data = cats.map(c => c.count);
         const colors = this.getChartThemeColors();
+        const isIt = this.currentLanguage === 'it';
 
         this.analyticsChartInstances['categories'] = new Chart(canvas, {
           type: 'doughnut',
@@ -3502,6 +3567,31 @@ document.addEventListener('alpine:init', () => {
                   font: { family: colors.fontFamily, size: 11 },
                   boxWidth: 12,
                   padding: 12
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.96)',
+                titleColor: '#ffffff',
+                titleFont: { family: colors.fontFamily, weight: 'bold', size: 13 },
+                bodyColor: '#e2e8f0',
+                bodyFont: { family: colors.fontFamily, size: 12 },
+                borderColor: 'rgba(255, 255, 255, 0.15)',
+                borderWidth: 1,
+                padding: 10,
+                boxPadding: 4,
+                cornerRadius: 8,
+                _customDark: true,
+                callbacks: {
+                  label: (ctx) => {
+                    const count = ctx.raw || 0;
+                    const pct = cats[ctx.dataIndex]?.percentage || 0;
+                    return (isIt ? ' Dispositivi: ' : ' Devices: ') + `${count} (${pct}%)`;
+                  },
+                  afterBody: (items) => {
+                    if (!items || items.length === 0) return [];
+                    const item = cats[items[0].dataIndex];
+                    return this.formatDevicesTooltipAfterBody(item ? item.devices : []);
+                  }
                 }
               }
             },
@@ -3531,13 +3621,14 @@ document.addEventListener('alpine:init', () => {
         const labels = vends.map(v => v.vendor);
         const data = vends.map(v => v.count);
         const colors = this.getChartThemeColors();
+        const isIt = this.currentLanguage === 'it';
 
         this.analyticsChartInstances['vendors'] = new Chart(canvas, {
           type: 'bar',
           data: {
             labels: labels,
             datasets: [{
-              label: 'Dispositivi',
+              label: isIt ? 'Dispositivi' : 'Devices',
               data: data,
               backgroundColor: 'rgba(99, 102, 241, 0.8)',
               borderColor: '#6366f1',
@@ -3550,7 +3641,32 @@ document.addEventListener('alpine:init', () => {
             maintainAspectRatio: false,
             animation: false,
             plugins: {
-              legend: { display: false }
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.96)',
+                titleColor: '#ffffff',
+                titleFont: { family: colors.fontFamily, weight: 'bold', size: 13 },
+                bodyColor: '#e2e8f0',
+                bodyFont: { family: colors.fontFamily, size: 12 },
+                borderColor: 'rgba(255, 255, 255, 0.15)',
+                borderWidth: 1,
+                padding: 10,
+                boxPadding: 4,
+                cornerRadius: 8,
+                _customDark: true,
+                callbacks: {
+                  label: (ctx) => {
+                    const val = ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.raw;
+                    const pct = vends[ctx.dataIndex]?.percentage || 0;
+                    return (isIt ? 'Dispositivi: ' : 'Devices: ') + `${val} (${pct}%)`;
+                  },
+                  afterBody: (items) => {
+                    if (!items || items.length === 0) return [];
+                    const item = vends[items[0].dataIndex];
+                    return this.formatDevicesTooltipAfterBody(item ? item.devices : []);
+                  }
+                }
+              }
             },
             scales: {
               x: {
