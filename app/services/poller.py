@@ -828,10 +828,17 @@ class BackgroundPoller:
                 
                 is_mock_test = (
                     (abs(down_val - 912.45) < 0.05 and abs(up_val - 298.10) < 0.05) or
-                    "TIM FTTH" in str(network_details.get("isp", ""))
+                    (abs(down_val - 2240.50) < 0.05 and abs(up_val - 980.20) < 0.05) or
+                    down_val > 2000.0 or
+                    "TIM FTTH" in str(network_details.get("isp", "")) or
+                    "Fastweb FTTH" in str(network_details.get("isp", "")) or
+                    "Fastweb" in str(network_details.get("isp", "")) or
+                    getattr(eero_client, "is_demo_mode", False) or
+                    (getattr(eero_client, "user_token", "") or "").startswith("demo_") or
+                    str(network_details.get("id", "")).startswith("network_demo_")
                 )
-                if is_mock_test and not getattr(eero_client, "is_demo_mode", False) and not (getattr(eero_client, "user_token", "") or "").startswith("demo_"):
-                    # Discard mock/demo speedtest telemetry leaking into authenticated session
+                if is_mock_test:
+                    # Discard mock/demo speedtest telemetry leaking into SQLite database
                     should_save = False
                 else:
                     history_sp = await db_service.get_speedtests(limit=1)

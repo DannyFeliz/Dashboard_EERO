@@ -63,15 +63,26 @@ class SpeedtestService:
                 await asyncio.sleep(2.0)
                 down, up, ping, jitter, server = await self._run_synthetic_speedtest()
 
-            # Registrazione nel database storico
-            test_id = await db_service.save_speedtest(
-                download_mbps=round(down, 2),
-                upload_mbps=round(up, 2),
-                ping_ms=round(ping, 1),
-                jitter=round(jitter, 1),
-                server_name=server,
-                source="eero_cloud" if (eero_client.is_authenticated and not (getattr(eero_client, "user_token", "") or "").startswith("demo_")) else "synthetics"
+            # Registrazione nel database storico (solo per test reali e account autenticati)
+            is_demo = (
+                getattr(eero_client, "is_demo_mode", False) or 
+                (getattr(eero_client, "user_token", "") or "").startswith("demo_") or 
+                settings.demo_mode or
+                down > 2000.0 or
+                (abs(down - 912.45) < 0.05 and abs(up - 298.10) < 0.05) or
+                (abs(down - 2240.50) < 0.05 and abs(up - 980.20) < 0.05)
             )
+            if not is_demo:
+                test_id = await db_service.save_speedtest(
+                    download_mbps=round(down, 2),
+                    upload_mbps=round(up, 2),
+                    ping_ms=round(ping, 1),
+                    jitter=round(jitter, 1),
+                    server_name=server,
+                    source="eero_cloud"
+                )
+            else:
+                test_id = 0
 
             self.last_run_time = datetime.now(timezone.utc).isoformat()
             self.last_result = {

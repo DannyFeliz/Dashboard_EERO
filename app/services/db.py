@@ -208,7 +208,12 @@ class DBService:
                OR server_name LIKE '%synthetics%'
                OR server_name LIKE '%Fastweb / Wind Tre%'
                OR server_name LIKE '%TIM FTTH%'
-               OR (ROUND(download_mbps, 2) = 912.45 AND ROUND(upload_mbps, 2) = 298.10);
+               OR server_name LIKE '%Fastweb FTTH%'
+               OR server_name LIKE '%Ufficio & Studio%'
+               OR source = 'synthetics'
+               OR (ROUND(download_mbps, 2) = 912.45 AND ROUND(upload_mbps, 2) = 298.10)
+               OR (ROUND(download_mbps, 2) = 2240.50 AND ROUND(upload_mbps, 2) = 980.20)
+               OR download_mbps > 2000;
         """
         try:
             if conn is not None:
@@ -266,6 +271,17 @@ class DBService:
                 """
                 SELECT id, timestamp, download_mbps, upload_mbps, ping_ms, jitter, server_name, source
                 FROM speedtests
+                WHERE server_name NOT LIKE '%Fastweb Milan%'
+                  AND server_name NOT LIKE '%Demo%'
+                  AND server_name NOT LIKE '%synthetics%'
+                  AND server_name NOT LIKE '%Fastweb / Wind Tre%'
+                  AND server_name NOT LIKE '%TIM FTTH%'
+                  AND server_name NOT LIKE '%Fastweb FTTH%'
+                  AND server_name NOT LIKE '%Ufficio & Studio%'
+                  AND source != 'synthetics'
+                  AND NOT (ROUND(download_mbps, 2) = 912.45 AND ROUND(upload_mbps, 2) = 298.10)
+                  AND NOT (ROUND(download_mbps, 2) = 2240.50 AND ROUND(upload_mbps, 2) = 980.20)
+                  AND download_mbps <= 2000
                 ORDER BY timestamp DESC
                 LIMIT ?
                 """,
@@ -287,6 +303,17 @@ class DBService:
                     AVG(ping_ms) as avg_ping,
                     MIN(ping_ms) as min_ping
                 FROM speedtests
+                WHERE server_name NOT LIKE '%Fastweb Milan%'
+                  AND server_name NOT LIKE '%Demo%'
+                  AND server_name NOT LIKE '%synthetics%'
+                  AND server_name NOT LIKE '%Fastweb / Wind Tre%'
+                  AND server_name NOT LIKE '%TIM FTTH%'
+                  AND server_name NOT LIKE '%Fastweb FTTH%'
+                  AND server_name NOT LIKE '%Ufficio & Studio%'
+                  AND source != 'synthetics'
+                  AND NOT (ROUND(download_mbps, 2) = 912.45 AND ROUND(upload_mbps, 2) = 298.10)
+                  AND NOT (ROUND(download_mbps, 2) = 2240.50 AND ROUND(upload_mbps, 2) = 980.20)
+                  AND download_mbps <= 2000
                 """
             )
             row = await cursor.fetchone()
