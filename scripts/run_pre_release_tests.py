@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pre-Release Automated Test Suite - eero Custom Dashboard (v1.4.02)
+Pre-Release Automated Test Suite - eero Custom Dashboard (v1.5.0)
 ==================================================================
 Covers:
   1. Authentication & Demo Mode toggle with session token preservation
@@ -775,7 +775,7 @@ async def run_all_tests():
         runner.assert_true(check_res.status_code == 200, "Endpoint GET /api/system/update/check risponde HTTP 200")
         check_data = check_res.json()
         runner.assert_true(check_data.get("status") == "success", "Stato update check è 'success'")
-        runner.assert_true(check_data.get("current_version") == "1.4.02", f"Versione corrente rilevata è 1.4.02 (ottenuta: {check_data.get('current_version')})")
+        runner.assert_true(check_data.get("current_version") == "1.5.0", f"Versione corrente rilevata è 1.5.0 (ottenuta: {check_data.get('current_version')})")
         runner.assert_true("cli_command" in check_data, "Comando CLI assistito presente nel payload di update")
 
         # 2. Test Endpoint /api/system/update/trigger (modalità manuale/assistita in test env)
@@ -1108,6 +1108,96 @@ async def run_all_tests():
             eero_client.current_network_id = orig_net_id
             eero_client._last_network_details = orig_cache_net
             eero_client._last_eeros = orig_cache_eeros
+
+        # =====================================================================
+        # 17. TEST MULTI-NETWORK FLEET MANAGEMENT, INTELLIGENT PRUNING & USAGE (v1.5.0)
+        # =====================================================================
+        print("\n🌐 [17/17] TEST MULTI-NETWORK FLEET MANAGEMENT, INTELLIGENT PRUNING & USAGE (v1.5.0)")
+        
+        # 1. Attiva demo mode
+        eero_client.set_demo_mode(True)
+        
+        # 2. Test GET /api/network/list
+        list_res = await client.get("/api/network/list")
+        runner.assert_true(list_res.status_code == 200, "Endpoint GET /api/network/list risponde HTTP 200")
+        list_data = list_res.json()
+        runner.assert_true(list_data.get("status") == "success", "GET /api/network/list restituisce status success")
+        runner.assert_true(len(list_data.get("networks", [])) >= 2, "Trovate almeno 2 reti disponibili nell'account Demo (Issue #22)")
+        net_ids = [n.get("id") for n in list_data.get("networks", [])]
+        runner.assert_true("network_demo_mesh_01" in net_ids and "network_demo_mesh_02" in net_ids, "Entrambe le reti demo (Casa Rossi Mesh 6E e Ufficio & Studio Pro Mesh) presenti")
+
+        # 3. Test POST /api/network/switch verso Rete 2
+        switch_res = await client.post("/api/network/switch", json={"network_id": "network_demo_mesh_02"})
+        runner.assert_true(switch_res.status_code == 200, "Endpoint POST /api/network/switch risponde HTTP 200")
+        switch_data = switch_res.json()
+        runner.assert_true(switch_data.get("active_network_id") == "network_demo_mesh_02", "Rete attiva cambiata con successo a 'network_demo_mesh_02'")
+        runner.assert_true(eero_client.current_network_id == "network_demo_mesh_02", "eero_client memorizza la nuova rete attiva")
+
+        # 4. Verifica dettagli rete post-switch
+        det_res = await client.get("/api/network/overview")
+        runner.assert_true(det_res.status_code == 200, "GET /api/network/overview risponde HTTP 200 post-switch")
+        det_data = det_res.json()
+        cached_net = det_data.get("data", {}).get("network", {})
+        net_name = cached_net.get("name") or cached_net.get("network_name") or ""
+        runner.assert_true("Ufficio & Studio" in net_name, f"Nome rete aggiornato a Ufficio & Studio (ottenuto: {net_name})")
+
+        # 5. Switch di ripristino su Rete 1
+        switch_back = await client.post("/api/network/switch", json={"network_id": "network_demo_mesh_01"})
+        runner.assert_true(switch_back.status_code == 200, "Ripristino su 'network_demo_mesh_01' eseguito con successo")
+
+        # 6. Test GET /api/network/top-hogs
+        hogs_res = await client.get("/api/network/top-hogs?period=daily")
+        runner.assert_true(hogs_res.status_code == 200, "Endpoint GET /api/network/top-hogs risponde HTTP 200")
+        hogs_data = hogs_res.json()
+        runner.assert_true(hogs_data.get("status") == "success", "top-hogs restituisce status success")
+        runner.assert_true(isinstance(hogs_data.get("top_hogs"), list), "top_hogs è un array valido")
+        runner.assert_true(len(hogs_data.get("top_hogs")) > 0, "Almeno un dispositivo presente nella classifica Top Hogs")
+
+        # 7. Test GET /api/devices/{mac}/usage
+        sample_mac = hogs_data.get("top_hogs")[0].get("mac")
+        usage_res = await client.get(f"/api/devices/{sample_mac}/usage?period=daily")
+        runner.assert_true(usage_res.status_code == 200, f"Endpoint GET /api/devices/{sample_mac}/usage risponde HTTP 200")
+        usage_data = usage_res.json()
+        runner.assert_true(usage_data.get("status") == "success", "device usage status è success")
+        u_info = usage_data.get("data", {})
+        runner.assert_true(u_info.get("period") == "daily", "Periodo usage è daily")
+        runner.assert_true("summary" in u_info and "rx_bytes" in u_info["summary"], "Sommario consumo include rx_bytes")
+        runner.assert_true(len(u_info.get("data_points", [])) > 0, "Punti storici consumo presenti nel payload")
+
+        # 8. Test Intelligent Address Pruning (Issue #31)
+        prune_existing = {
+            "name": "NAS_Storage",
+            "ids": [
+                "00:11:22:33:44:99",
+                "192.168.4.200",
+                "2001:db8::dead:beef",
+                "2001:db8::cafe:babe",
+                "storage.local",
+                "192.168.4.0/24"
+            ]
+        }
+        incoming_fresh = {
+            "name": "NAS_Storage",
+            "ids": [
+                "00:11:22:33:44:99",
+                "192.168.4.200",
+                "2001:db8::1111:2222"
+            ]
+        }
+        # Con prune_stale_ips=True:
+        pruned = dns_service._merge_adguard_client_data(prune_existing, incoming_fresh, prune_stale_ips=True, drop_ipv6=False)
+        runner.assert_true("00:11:22:33:44:99" in pruned["ids"], "MAC Address preservato nel pruning")
+        runner.assert_true("192.168.4.200" in pruned["ids"], "IPv4 attivo preservato nel pruning")
+        runner.assert_true("storage.local" in pruned["ids"], "Custom host alias storage.local preservato intatto")
+        runner.assert_true("192.168.4.0/24" in pruned["ids"], "Custom CIDR preservato intatto")
+        runner.assert_true("2001:db8::1111:2222" in pruned["ids"], "Nuovo IPv6 attivo incluso")
+        runner.assert_true("2001:db8::dead:beef" not in pruned["ids"], "Stale SLAAC IPv6 dead:beef correttamente potato (Issue #31)")
+        runner.assert_true("2001:db8::cafe:babe" not in pruned["ids"], "Stale SLAAC IPv6 cafe:babe correttamente potato (Issue #31)")
+
+        # Con drop_ipv6=True:
+        dropped_v6 = dns_service._merge_adguard_client_data(prune_existing, incoming_fresh, prune_stale_ips=True, drop_ipv6=True)
+        runner.assert_true(not any(":" in x and len(x) > 17 for x in dropped_v6["ids"]), "Nessun indirizzo IPv6 presente quando drop_ipv6=True (Issue #31)")
+        runner.assert_true("00:11:22:33:44:99" in dropped_v6["ids"], "MAC a 17 caratteri preservato con drop_ipv6")
 
     runner.print_summary()
 

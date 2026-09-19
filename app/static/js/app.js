@@ -6,7 +6,7 @@
 document.addEventListener('alpine:init', () => {
   Alpine.data('eeroApp', () => ({
     // App Version
-    appVersion: '1.4.02',
+    appVersion: '1.5.0',
 
     // Windows 11 Dual Theme Engine State
     currentTheme: localStorage.getItem('eero_theme') || 'system',
@@ -53,6 +53,22 @@ document.addEventListener('alpine:init', () => {
     },
     lastPollTime: null,
     pollingTimer: null,
+
+    // Multi-Network Fleet Management State (v1.5.0 - Issue #22)
+    availableNetworks: [],
+    activeNetworkId: '',
+    isSwitchingNetwork: false,
+
+    // Device Data Usage Insights State (v1.5.0)
+    deviceUsagePeriod: 'daily', // 'daily' | 'weekly' | 'monthly'
+    deviceUsageLoading: false,
+    deviceUsageData: null,
+    deviceUsageChart: null,
+
+    // Top Bandwidth Hogs State (v1.5.0)
+    topHogsList: [],
+    topHogsPeriod: 'daily',
+    topHogsLoading: false,
 
     // Bandwidth Historian State
     selectedWanRange: 24, // 24h, 168 (7d), 720 (30d)
@@ -692,6 +708,8 @@ document.addEventListener('alpine:init', () => {
     async refreshAllData() {
       await Promise.all([
         this.fetchOverview(),
+        this.fetchAvailableNetworks(),
+        this.fetchTopHogs(this.topHogsPeriod),
         this.fetchRealtimeMetrics(),
         this.fetchDevices(),
         this.fetchProfiles(),
@@ -715,6 +733,12 @@ document.addEventListener('alpine:init', () => {
           this.healthScore = json.data.health_score || 100;
           this.healthDetails = json.data.health_details || null;
           this.lastPollTime = json.data.last_poll_time;
+          if (json.data.available_networks && json.data.available_networks.length > 0) {
+            this.availableNetworks = json.data.available_networks;
+          }
+          if (json.data.active_network_id) {
+            this.activeNetworkId = json.data.active_network_id;
+          }
         }
       } catch (err) {
         console.error("Fetch overview error:", err);
@@ -2271,6 +2295,8 @@ document.addEventListener('alpine:init', () => {
         zone: 'lan',
         has_password: false,
         enabled: true,
+        prune_stale_ips: true,
+        drop_ipv6: false,
         last_sync_time: '',
         last_sync_status: '',
         last_sync_count: 0
@@ -2960,6 +2986,206 @@ document.addEventListener('alpine:init', () => {
       if (inOl) out.push('</ol>');
 
       return out.join('\n');
+    },
+
+    // =========================================================================
+    // MULTI-NETWORK FLEET MANAGEMENT (v1.5.0 - Issue #22)
+    // =========================================================================
+    formatBytes(bytes, decimals = 1) {
+      if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B';
+      const k = 1024;
+      const dm = decimals < 0 ? 0 : decimals;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      const idx = Math.min(i, sizes.length - 1);
+      return parseFloat((bytes / Math.pow(k, idx)).toFixed(dm)) + ' ' + sizes[idx];
+    },
+
+    async fetchAvailableNetworks() {
+      try {
+        const res = await fetch('/api/network/list');
+        const data = await res.json();
+        if (data.status === 'success') {
+          this.availableNetworks = data.networks || [];
+          this.activeNetworkId = data.active_network_id || (this.network ? this.network.id : '');
+        }
+      } catch (err) {
+        console.error('Fetch available networks error:', err);
+      }
+    },
+
+    async switchActiveNetwork(networkId) {
+      if (!networkId || networkId === this.activeNetworkId || this.isSwitchingNetwork) return;
+      this.isSwitchingNetwork = true;
+      try {
+        const res = await fetch('/api/network/switch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ network_id: networkId })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          this.activeNetworkId = data.active_network_id;
+          if (data.data) {
+            this.network = data.data.network || {};
+            this.eeros = data.data.eeros || [];
+            this.devices = data.data.devices || [];
+            this.profiles = data.data.profiles || [];
+            this.healthScore = data.data.health_score || 100;
+            this.healthDetails = data.data.health_details || null;
+            this.lastPollTime = data.data.last_poll_time;
+          }
+          await this.fetchAvailableNetworks();
+          await this.fetchTopHogs(this.topHogsPeriod);
+          this.showToast('Rete Attiva Cambiata', `Connesso con successo alla rete: ${networkId}`, 'success');
+        } else {
+          this.showToast('Errore Cambio Rete', data.detail || data.message || 'Operazione non riuscita', 'error');
+        }
+      } catch (err) {
+        console.error('Switch network error:', err);
+        this.showToast('Errore', String(err), 'error');
+      } finally {
+        this.isSwitchingNetwork = false;
+      }
+    },
+
+    // =========================================================================
+    // DEVICE DATA USAGE INSIGHTS SUITE & TOP HOGS (v1.5.0)
+    // =========================================================================
+    async fetchTopHogs(period = 'daily') {
+      this.topHogsPeriod = period;
+      this.topHogsLoading = true;
+      try {
+        const res = await fetch(`/api/network/top-hogs?period=${period}&limit=5`);
+        const data = await res.json();
+        if (data.status === 'success') {
+          this.topHogsList = data.top_hogs || [];
+        }
+      } catch (err) {
+        console.error('Fetch top hogs error:', err);
+      } finally {
+        this.topHogsLoading = false;
+      }
+    },
+
+    async loadDeviceUsage(mac, period = null) {
+      const targetMac = mac || (this.selectedDevice ? (this.selectedDevice.mac || this.selectedDevice.mac_address) : '');
+      if (!targetMac) return;
+      if (period) {
+        this.deviceUsagePeriod = period;
+      }
+      const activePeriod = this.deviceUsagePeriod || 'daily';
+      this.deviceUsageLoading = true;
+      try {
+        const res = await fetch(`/api/devices/${encodeURIComponent(targetMac)}/usage?period=${activePeriod}`);
+        const data = await res.json();
+        if (data.status === 'success') {
+          this.deviceUsageData = data.data;
+          this.$nextTick(() => {
+            this.renderDeviceUsageChart(data.data);
+          });
+        }
+      } catch (err) {
+        console.error('Load device usage error:', err);
+      } finally {
+        this.deviceUsageLoading = false;
+      }
+    },
+
+    openDeviceDetailByMac(mac) {
+      if (!mac) return;
+      const dev = (this.devices || []).find(d => ((d.mac || d.mac_address || '').toLowerCase() === mac.toLowerCase()));
+      if (dev) {
+        this.openDeviceModal(dev);
+        this.deviceDetailTab = 'usage';
+        this.loadDeviceUsage(mac, this.deviceUsagePeriod || 'daily');
+      }
+    },
+
+    renderDeviceUsageChart(usageData) {
+      const canvas = document.getElementById('deviceUsageChartCanvas');
+      if (!canvas) return;
+      if (this.deviceUsageChart) {
+        this.deviceUsageChart.destroy();
+        this.deviceUsageChart = null;
+      }
+      if (!usageData || !usageData.data_points || usageData.data_points.length === 0) return;
+
+      const isDark = document.documentElement.classList.contains('dark');
+      const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+      const textColor = isDark ? '#94a3b8' : '#64748b';
+
+      const labels = usageData.data_points.map(p => {
+        const d = new Date(p.timestamp);
+        return usageData.period === 'daily' 
+          ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+      });
+
+      const downRates = usageData.data_points.map(p => p.download_rate_mbps || 0);
+      const upRates = usageData.data_points.map(p => p.upload_rate_mbps || 0);
+
+      this.deviceUsageChart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Download (Mbps)',
+              data: downRates,
+              borderColor: '#0067c0',
+              backgroundColor: isDark ? 'rgba(0, 103, 192, 0.25)' : 'rgba(0, 103, 192, 0.15)',
+              fill: true,
+              tension: 0.35,
+              pointRadius: 2,
+              pointHoverRadius: 5,
+              borderWidth: 2
+            },
+            {
+              label: 'Upload (Mbps)',
+              data: upRates,
+              borderColor: '#10b981',
+              backgroundColor: isDark ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.15)',
+              fill: true,
+              tension: 0.35,
+              pointRadius: 2,
+              pointHoverRadius: 5,
+              borderWidth: 2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: { color: textColor, boxWidth: 12, font: { size: 11 } }
+            },
+            tooltip: {
+              backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+              titleColor: isDark ? '#f8fafc' : '#0f172a',
+              bodyColor: isDark ? '#cbd5e1' : '#334155',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+              borderWidth: 1,
+              padding: 10
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: gridColor },
+              ticks: { color: textColor, font: { size: 10 } }
+            },
+            y: {
+              grid: { color: gridColor },
+              ticks: { color: textColor, font: { size: 10 } },
+              title: { display: true, text: 'Mbps', color: textColor, font: { size: 10 } }
+            }
+          }
+        }
+      });
     },
 
     // =========================================================================

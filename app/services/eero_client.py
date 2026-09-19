@@ -183,8 +183,10 @@ class EeroClient:
         self.user_token: Optional[str] = None
         self.account_info: Optional[Dict[str, Any]] = None
         self.current_network_id: Optional[str] = None
+        self.available_networks: List[Dict[str, Any]] = []
         self.saved_live_token: Optional[str] = None
         self.saved_live_network_id: Optional[str] = None
+        self.saved_live_networks: List[Dict[str, Any]] = []
         self.saved_live_account_info: Optional[Dict[str, Any]] = None
         self.current_gateway_id: Optional[str] = None
         self.current_gateway_url: Optional[str] = None
@@ -194,6 +196,7 @@ class EeroClient:
         self._last_eeros: Optional[List[Dict[str, Any]]] = None
         self._is_demo_active: bool = False
         self._http_client: Optional[httpx.AsyncClient] = None
+        self._demo_networks_store: Dict[str, Dict[str, Any]] = {}
         self.load_session()
 
         # Simulated Demo State
@@ -249,16 +252,23 @@ class EeroClient:
                     self.saved_live_token = saved_live_tok
                     self.saved_live_network_id = data.get("saved_live_network_id") or data.get("network_id")
                     self.saved_live_account_info = data.get("saved_live_account_info") or data.get("account_info")
+                    self.saved_live_networks = data.get("saved_live_networks") or []
                     self._is_demo_active = bool(data.get("is_demo_active", False))
 
                     if self._is_demo_active:
                         self.user_token = "demo_verified_master_token"
-                        self.current_network_id = "network_demo_mesh_01"
+                        stored_demo_net = data.get("network_id")
+                        if stored_demo_net in ("network_demo_mesh_01", "network_demo_mesh_02"):
+                            self.current_network_id = stored_demo_net
+                        else:
+                            self.current_network_id = "network_demo_mesh_01"
                         self.account_info = {"name": "Demo Administrator", "email": "admin@demo-eero.lan"}
+                        self.available_networks = self.get_available_networks()
                     else:
                         self.user_token = stored_user_token
                         self.current_network_id = data.get("network_id")
                         self.account_info = data.get("account_info")
+                        self.available_networks = data.get("available_networks") or []
 
                     logger.info(f"Loaded existing eero session (Network ID: {self.current_network_id}, Demo Mode: {self.is_demo_mode})")
         except Exception as e:
@@ -271,9 +281,11 @@ class EeroClient:
             data = {
                 "user_token": self.user_token,
                 "network_id": self.current_network_id,
+                "available_networks": self.available_networks,
                 "account_info": self.account_info,
                 "saved_live_token": self.saved_live_token,
                 "saved_live_network_id": self.saved_live_network_id,
+                "saved_live_networks": self.saved_live_networks,
                 "saved_live_account_info": self.saved_live_account_info,
                 "is_demo_active": self._is_demo_active,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -291,20 +303,26 @@ class EeroClient:
                 self.saved_live_token = self.user_token
                 self.saved_live_network_id = self.current_network_id
                 self.saved_live_account_info = self.account_info
+                self.saved_live_networks = list(self.available_networks)
             self._is_demo_active = True
             self.user_token = "demo_verified_master_token"
             self.current_network_id = "network_demo_mesh_01"
             self.account_info = {"name": "Demo Administrator", "email": "admin@demo-eero.lan"}
+            self.available_networks = self.get_available_networks()
+            if hasattr(self, "_demo_networks_store") and "network_demo_mesh_01" in self._demo_networks_store:
+                self._demo_state = self._demo_networks_store["network_demo_mesh_01"]
         else:
             self._is_demo_active = False
             if self.saved_live_token and not self.saved_live_token.startswith("demo_"):
                 self.user_token = self.saved_live_token
                 self.current_network_id = self.saved_live_network_id
                 self.account_info = self.saved_live_account_info
+                self.available_networks = self.saved_live_networks
             else:
                 self.user_token = None
                 self.current_network_id = None
                 self.account_info = None
+                self.available_networks = []
         self.save_session()
 
     def clear_session(self):
@@ -312,8 +330,10 @@ class EeroClient:
         self.user_token = None
         self.current_network_id = None
         self.account_info = None
+        self.available_networks = []
         self.saved_live_token = None
         self.saved_live_network_id = None
+        self.saved_live_networks = []
         self.saved_live_account_info = None
         self._is_demo_active = False
         if self.session_path.exists():
@@ -322,6 +342,88 @@ class EeroClient:
                 logger.info("Removed session file on logout.")
             except Exception as e:
                 logger.error(f"Failed to remove session file: {e}")
+
+    def get_available_networks(self) -> List[Dict[str, Any]]:
+        """Restituisce la lista di tutte le reti eero disponibili con il flag is_active aggiornato."""
+        if self.is_demo_mode:
+            return [
+                {
+                    "id": "network_demo_mesh_01",
+                    "name": "Casa Rossi Mesh 6E",
+                    "url": "/2.2/networks/network_demo_mesh_01",
+                    "role": "owner",
+                    "is_active": self.current_network_id == "network_demo_mesh_01",
+                },
+                {
+                    "id": "network_demo_mesh_02",
+                    "name": "Ufficio & Studio Pro Mesh",
+                    "url": "/2.2/networks/network_demo_mesh_02",
+                    "role": "admin",
+                    "is_active": self.current_network_id == "network_demo_mesh_02",
+                }
+            ]
+
+        result = []
+        for n in self.available_networks:
+            item = dict(n)
+            item["is_active"] = (item.get("id") == self.current_network_id)
+            result.append(item)
+
+        # Fallback se non ci sono reti in available_networks ma c'è current_network_id
+        if not result and self.current_network_id:
+            result.append({
+                "id": self.current_network_id,
+                "name": f"eero Network ({self.current_network_id})",
+                "url": f"/2.2/networks/{self.current_network_id}",
+                "role": "owner",
+                "is_active": True,
+            })
+        return result
+
+    async def switch_network(self, network_id: str) -> Dict[str, Any]:
+        """Effettua l'hot-swap della rete eero attiva, preservando la sessione e invalidando la cache."""
+        clean_id = str(network_id or "").strip()
+        if not clean_id:
+            raise ValueError("ID rete non valido.")
+
+        old_net_id = self.current_network_id
+        logger.info(f"Switching eero active network from '{old_net_id}' to '{clean_id}'...")
+
+        if self.is_demo_mode:
+            valid_demo_ids = ("network_demo_mesh_01", "network_demo_mesh_02")
+            if clean_id not in valid_demo_ids:
+                raise ValueError(f"Rete demo '{clean_id}' non trovata. Valide: {valid_demo_ids}")
+
+            # Salva stato della rete demo precedente nello store
+            if hasattr(self, "_demo_networks_store") and old_net_id:
+                self._demo_networks_store[old_net_id] = self._demo_state
+
+            self.current_network_id = clean_id
+            if hasattr(self, "_demo_networks_store") and clean_id in self._demo_networks_store:
+                self._demo_state = self._demo_networks_store[clean_id]
+        else:
+            self.current_network_id = clean_id
+            self.saved_live_network_id = clean_id
+
+        # Invalida cache gateway per la nuova rete
+        self.current_gateway_id = None
+        self.current_gateway_url = None
+        self.current_gateway_name = None
+        self.current_gateway_ip = None
+        self._last_network_details = None
+        self._last_eeros = None
+
+        # Aggiorna flag is_active in available_networks
+        for net in self.available_networks:
+            net["is_active"] = (net.get("id") == self.current_network_id)
+
+        self.save_session()
+        logger.info(f"Successfully switched active network to '{self.current_network_id}'.")
+        return {
+            "status": "success",
+            "active_network_id": self.current_network_id,
+            "available_networks": self.get_available_networks()
+        }
 
     @property
     def is_authenticated(self) -> bool:
@@ -420,7 +522,7 @@ class EeroClient:
             return {"status": "success", "account": account}
 
     async def fetch_account_info(self) -> Dict[str, Any]:
-        """Recupera le informazioni dell'account e l'ID della prima rete attiva, supportando proprietari e admin invitati."""
+        """Recupera le informazioni dell'account e tutte le reti disponibili (Issue #22), preservando la rete attiva."""
         if settings.demo_mode or not self.is_authenticated or self.user_token.startswith("demo_"):
             return self._get_demo_account()
 
@@ -428,48 +530,84 @@ class EeroClient:
             resp = await client.get(f"{EERO_API_BASE}/account", headers=self._get_headers())
             if resp.status_code != 200:
                 resp = await client.get(f"{EERO_API_BASE}/user", headers=self._get_headers())
-            
+
             if resp.status_code != 200:
                 logger.error(f"Failed to fetch account info ({resp.status_code}): {resp.text}")
                 return self.account_info or {}
 
             data = resp.json().get("data", {})
             self.account_info = data
-            
+
             # 1. Parsing delle reti da account/user (supporta reti proprietarie, condivise e admin)
-            networks = []
+            raw_networks = []
             for net_key in ("networks", "shared_networks", "guest_networks", "admin_networks"):
                 net_val = data.get(net_key)
                 if isinstance(net_val, dict):
                     cand = net_val.get("data", [])
                     if isinstance(cand, list):
-                        networks.extend(cand)
+                        raw_networks.extend(cand)
                 elif isinstance(net_val, list):
-                    networks.extend(net_val)
+                    raw_networks.extend(net_val)
 
             # 2. Fallback per account con sole reti condivise/admin: endpoint /2.2/networks
-            if not networks:
+            if not raw_networks:
                 try:
                     net_resp = await client.get(f"{EERO_API_BASE}/networks", headers=self._get_headers())
                     if net_resp.status_code == 200:
                         net_data = net_resp.json().get("data", [])
                         if isinstance(net_data, list):
-                            networks.extend(net_data)
+                            raw_networks.extend(net_data)
                         elif isinstance(net_data, dict):
-                            networks.extend(net_data.get("data", []))
+                            raw_networks.extend(net_data.get("data", []))
                 except Exception as e:
                     logger.warning(f"Fallback fetch /networks failed: {e}")
 
-            # 3. Risoluzione network ID
-            if networks:
-                first_net = networks[0]
-                if isinstance(first_net, dict):
-                    net_url = str(first_net.get("url", ""))
-                    self.current_network_id = net_url.split("/")[-1] if "/" in net_url else str(first_net.get("id", ""))
-                elif isinstance(first_net, str):
-                    self.current_network_id = first_net.split("/")[-1]
+            # 3. Normalizzazione lista reti disponibili (Multi-Network Fleet Management - Issue #22)
+            parsed_networks = []
+            for item in raw_networks:
+                if isinstance(item, dict):
+                    net_url = str(item.get("url", ""))
+                    net_id = net_url.split("/")[-1] if "/" in net_url else str(item.get("id", ""))
+                    net_name = item.get("name") or item.get("nickname") or f"eero Network ({net_id})"
+                    role = item.get("role") or ("owner" if "shared" not in net_url else "admin")
+                    if net_id and not any(x["id"] == net_id for x in parsed_networks):
+                        parsed_networks.append({
+                            "id": net_id,
+                            "name": net_name,
+                            "url": net_url or f"/2.2/networks/{net_id}",
+                            "role": role,
+                        })
+                elif isinstance(item, str):
+                    net_id = item.split("/")[-1]
+                    if net_id and not any(x["id"] == net_id for x in parsed_networks):
+                        parsed_networks.append({
+                            "id": net_id,
+                            "name": f"eero Network ({net_id})",
+                            "url": f"/2.2/networks/{net_id}",
+                            "role": "owner",
+                        })
 
-            logger.info(f"Resolved eero network: ID={self.current_network_id}")
+            if parsed_networks:
+                self.available_networks = parsed_networks
+                # Risoluzione network ID attivo:
+                # - Se c'è settings.eero_network_id in .env ed è presente, priorità a quello
+                # - Se self.current_network_id è già impostato ed esiste tra le reti disponibili, MANTIENILO! (Issue #22 bug fix)
+                # - Altrimenti fallback alla prima rete disponibile
+                env_net_id = (settings.eero_network_id or "").strip()
+                known_ids = [x["id"] for x in parsed_networks]
+
+                if env_net_id and env_net_id in known_ids:
+                    self.current_network_id = env_net_id
+                elif self.current_network_id and self.current_network_id in known_ids:
+                    # Preserva la rete già selezionata dall'utente!
+                    pass
+                else:
+                    self.current_network_id = parsed_networks[0]["id"]
+
+                for n in self.available_networks:
+                    n["is_active"] = (n["id"] == self.current_network_id)
+
+            logger.info(f"Resolved eero network: ID={self.current_network_id} (Total available networks: {len(self.available_networks)})")
             self.save_session()
             return data
 
@@ -3058,7 +3196,10 @@ class EeroClient:
     # SIMULATORE DEMO MODE (FALLBACK & TESTING REALISTICO)
     # =========================================================================
     def _init_demo_state(self) -> Dict[str, Any]:
-        return {
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
+        # 1. Rete Demo 1: Residenziale Mesh 6E (Casa Rossi)
+        net1 = {
             "account": {
                 "name": "Mario Rossi",
                 "email": "mario.rossi@homelab.local",
@@ -3088,7 +3229,7 @@ class EeroClient:
                 "upload_mbps": 298.10,
                 "ping_ms": 9.2,
                 "jitter": 1.1,
-                "date": datetime.now(timezone.utc).isoformat(),
+                "date": now_iso,
             },
             "eeros": [
                 {
@@ -3178,10 +3319,10 @@ class EeroClient:
                     "ethernet_speed": "1.0 Gbps",
                     "connected_eero_id": "eero_02_studio",
                     "connected_eero_name": "Studio & Server Room",
-                    "download_rate_mbps": 65.4,
-                    "upload_rate_mbps": 28.1,
+                    "download_rate_mbps": 88.4,
+                    "upload_rate_mbps": 12.1,
                     "rx_bytes": 48900200100,
-                    "tx_bytes": 22100400500,
+                    "tx_bytes": 19400100200,
                     "paused": False,
                 },
                 {
@@ -3195,16 +3336,16 @@ class EeroClient:
                     "connection_type": "wireless",
                     "wireless_band": "5GHz",
                     "frequency_band": "5 GHz",
-                    "channel": 36,
+                    "channel": 44,
                     "signal_rssi": -55,
                     "rx_bitrate": "866.0 MBit/s",
                     "phy_rate": "866.0 MBit/s",
                     "connected_eero_id": "eero_01_gateway",
                     "connected_eero_name": "Gateway Soggiorno",
-                    "download_rate_mbps": 12.3,
-                    "upload_rate_mbps": 1.1,
+                    "download_rate_mbps": 6.2,
+                    "upload_rate_mbps": 0.8,
                     "rx_bytes": 5400200100,
-                    "tx_bytes": 1100400500,
+                    "tx_bytes": 1200400100,
                     "paused": False,
                 },
                 {
@@ -3218,16 +3359,16 @@ class EeroClient:
                     "connection_type": "wireless",
                     "wireless_band": "5GHz",
                     "frequency_band": "5 GHz",
-                    "channel": 44,
-                    "signal_rssi": -51,
+                    "channel": 36,
+                    "signal_rssi": -62,
                     "rx_bitrate": "433.0 MBit/s",
                     "phy_rate": "433.0 MBit/s",
                     "connected_eero_id": "eero_01_gateway",
                     "connected_eero_name": "Gateway Soggiorno",
-                    "download_rate_mbps": 24.5,
-                    "upload_rate_mbps": 0.4,
+                    "download_rate_mbps": 25.4,
+                    "upload_rate_mbps": 0.5,
                     "rx_bytes": 28900400100,
-                    "tx_bytes": 450100200,
+                    "tx_bytes": 850100200,
                     "paused": False,
                 },
                 {
@@ -3247,56 +3388,56 @@ class EeroClient:
                     "ethernet_speed": "1.0 Gbps",
                     "connected_eero_id": "eero_01_gateway",
                     "connected_eero_name": "Gateway Soggiorno",
-                    "download_rate_mbps": 3.2,
-                    "upload_rate_mbps": 0.8,
+                    "download_rate_mbps": 0.0,
+                    "upload_rate_mbps": 0.0,
                     "rx_bytes": 19400200100,
-                    "tx_bytes": 890400500,
+                    "tx_bytes": 4500100200,
                     "paused": False,
                 },
                 {
                     "id": "dev_06",
-                    "mac": "48:E7:DA:99:88:77",
+                    "mac": "DC:A6:32:88:77:66",
+                    "hostname": "HomeAssistant-Yellow",
+                    "nickname": "Home Assistant Hub",
+                    "ip": "192.168.4.20",
+                    "connected": True,
+                    "wireless": False,
+                    "wired": True,
+                    "connection_type": "wired",
+                    "wireless_band": "Ethernet",
+                    "frequency_band": "Ethernet",
+                    "channel": None,
+                    "signal_rssi": None,
+                    "ethernet_speed": "1.0 Gbps",
+                    "connected_eero_id": "eero_02_studio",
+                    "connected_eero_name": "Studio & Server Room",
+                    "download_rate_mbps": 0.8,
+                    "upload_rate_mbps": 0.4,
+                    "rx_bytes": 350200100,
+                    "tx_bytes": 120400100,
+                    "paused": False,
+                },
+                {
+                    "id": "dev_07",
+                    "mac": "5C:02:72:11:22:33",
                     "hostname": "Shelly-Pro-4PM",
-                    "nickname": "Shelly Domotica Quadro",
-                    "ip": "192.168.4.180",
+                    "nickname": "Quadro Elettrico Domotica",
+                    "ip": "192.168.4.55",
                     "connected": True,
                     "wireless": True,
                     "connection_type": "wireless",
                     "wireless_band": "2.4GHz",
                     "frequency_band": "2.4 GHz",
                     "channel": 6,
-                    "signal_rssi": -62,
+                    "signal_rssi": -65,
                     "rx_bitrate": "72.0 MBit/s",
                     "phy_rate": "72.0 MBit/s",
                     "connected_eero_id": "eero_03_camera",
                     "connected_eero_name": "Camera da Letto",
-                    "download_rate_mbps": 0.05,
-                    "upload_rate_mbps": 0.08,
-                    "rx_bytes": 350200100,
-                    "tx_bytes": 480100500,
-                    "paused": False,
-                },
-                {
-                    "id": "dev_07",
-                    "mac": "18:B4:30:11:22:33",
-                    "hostname": "Nest-Thermostat-E",
-                    "nickname": "Termostato Soggiorno",
-                    "ip": "192.168.4.185",
-                    "connected": True,
-                    "wireless": True,
-                    "connection_type": "wireless",
-                    "wireless_band": "2.4GHz",
-                    "frequency_band": "2.4 GHz",
-                    "channel": 11,
-                    "signal_rssi": -76,
-                    "rx_bitrate": "54.0 MBit/s",
-                    "phy_rate": "54.0 MBit/s",
-                    "connected_eero_id": "eero_01_gateway",
-                    "connected_eero_name": "Gateway Soggiorno",
-                    "download_rate_mbps": 0.02,
-                    "upload_rate_mbps": 0.03,
+                    "download_rate_mbps": 0.1,
+                    "upload_rate_mbps": 0.1,
                     "rx_bytes": 120400100,
-                    "tx_bytes": 190200100,
+                    "tx_bytes": 85020010,
                     "paused": False,
                 },
                 {
@@ -3310,39 +3451,39 @@ class EeroClient:
                     "connection_type": "wireless",
                     "wireless_band": "5GHz",
                     "frequency_band": "5 GHz",
-                    "channel": 36,
-                    "signal_rssi": -75,
-                    "rx_bitrate": "300.0 MBit/s",
-                    "phy_rate": "300.0 MBit/s",
+                    "channel": 44,
+                    "signal_rssi": None,
+                    "rx_bitrate": None,
+                    "phy_rate": None,
                     "connected_eero_id": "eero_01_gateway",
                     "connected_eero_name": "Gateway Soggiorno",
                     "download_rate_mbps": 0.0,
                     "upload_rate_mbps": 0.0,
                     "rx_bytes": 4100200100,
-                    "tx_bytes": 320100400,
+                    "tx_bytes": 980100200,
                     "paused": False,
                 },
                 {
                     "id": "dev_09",
-                    "mac": "DC:A6:32:88:77:66",
-                    "hostname": "RaspberryPi-HomeAssistant",
-                    "nickname": "Home Assistant Server",
-                    "ip": "192.168.4.20",
+                    "mac": "AC:BC:32:44:55:66",
+                    "hostname": "Nest-Doorbell-Battery",
+                    "nickname": "Videocitofono Ingresso",
+                    "ip": "192.168.4.140",
                     "connected": True,
-                    "wireless": False,
-                    "wired": True,
-                    "connection_type": "wired",
-                    "wireless_band": "Ethernet",
-                    "frequency_band": "Ethernet",
-                    "channel": None,
-                    "signal_rssi": None,
-                    "ethernet_speed": "1.0 Gbps",
-                    "connected_eero_id": "eero_02_studio",
-                    "connected_eero_name": "Studio & Server Room",
-                    "download_rate_mbps": 1.4,
-                    "upload_rate_mbps": 0.9,
+                    "wireless": True,
+                    "connection_type": "wireless",
+                    "wireless_band": "5GHz",
+                    "frequency_band": "5 GHz",
+                    "channel": 36,
+                    "signal_rssi": -52,
+                    "rx_bitrate": "150.0 MBit/s",
+                    "phy_rate": "150.0 MBit/s",
+                    "connected_eero_id": "eero_01_gateway",
+                    "connected_eero_name": "Gateway Soggiorno",
+                    "download_rate_mbps": 1.2,
+                    "upload_rate_mbps": 2.8,
                     "rx_bytes": 8900400100,
-                    "tx_bytes": 5400200100,
+                    "tx_bytes": 15400200300,
                     "paused": False,
                 },
                 {
@@ -3356,7 +3497,7 @@ class EeroClient:
                     "connection_type": "wireless",
                     "wireless_band": "5GHz",
                     "frequency_band": "5 GHz",
-                    "channel": 48,
+                    "channel": 40,
                     "signal_rssi": -58,
                     "rx_bitrate": "300.0 MBit/s",
                     "phy_rate": "300.0 MBit/s",
@@ -3412,6 +3553,250 @@ class EeroClient:
             ]
         }
 
+        # 2. Rete Demo 2: Professionale Multi-Gigabit (Ufficio & Studio Pro Mesh - Issue #22)
+        net2 = {
+            "account": {
+                "name": "Mario Rossi (Pro Admin)",
+                "email": "mario.rossi@homelab.local",
+                "phone": "+39 340 1234567"
+            },
+            "network": {
+                "id": "network_demo_mesh_02",
+                "name": "Ufficio & Studio Pro Mesh",
+                "status": "online",
+                "public_ip": "2.228.104.55",
+                "gateway_ip": "192.168.10.1",
+                "subnet_mask": "255.255.255.0",
+                "dns_servers": ["9.9.9.9", "149.112.112.112"],
+                "isp": "Fastweb FTTH 2.5Gbps / 1Gbps",
+                "ipv6_enabled": True,
+                "upnp_enabled": False,
+                "band_steering_enabled": True,
+                "health_score": 100,
+            },
+            "guest_network": {
+                "enabled": False,
+                "name": "Studio - Ospiti Pro",
+                "password": "StudioGuest2026!",
+            },
+            "speedtest": {
+                "download_mbps": 2240.50,
+                "upload_mbps": 980.20,
+                "ping_ms": 5.4,
+                "jitter": 0.8,
+                "date": now_iso,
+            },
+            "eeros": [
+                {
+                    "id": "eero_office_gw",
+                    "serial": "GW-EEROMAX7-001",
+                    "name": "Gateway Rack Ufficio",
+                    "model": "eero Max 7 (T010001)",
+                    "is_gateway": True,
+                    "wired": True,
+                    "status": "online",
+                    "ip": "192.168.10.1",
+                    "mac": "50:D4:F7:11:AA:BB",
+                    "os_version": "v7.5.2-192",
+                    "led_on": True,
+                    "backhaul_type": "Gateway (WAN)",
+                    "connected_clients_count": 6,
+                },
+                {
+                    "id": "eero_office_lab",
+                    "serial": "EEROMAX7-002-LAB",
+                    "name": "Laboratorio & Workstation",
+                    "model": "eero Max 7 (T010001)",
+                    "is_gateway": False,
+                    "wired": True,
+                    "status": "online",
+                    "ip": "192.168.10.2",
+                    "mac": "50:D4:F7:22:CC:DD",
+                    "os_version": "v7.5.2-192",
+                    "led_on": False,
+                    "backhaul_type": "Ethernet (2.5 Gbps)",
+                    "connected_clients_count": 4,
+                }
+            ],
+            "devices": [
+                {
+                    "id": "dev_off_01",
+                    "mac": "3C:22:FB:44:55:66",
+                    "hostname": "Proxmox-Cluster-01",
+                    "nickname": "Hypervisor Proxmox VE",
+                    "ip": "192.168.10.200",
+                    "connected": True,
+                    "wireless": False,
+                    "wired": True,
+                    "connection_type": "wired",
+                    "wireless_band": "Ethernet",
+                    "frequency_band": "Ethernet",
+                    "channel": None,
+                    "signal_rssi": None,
+                    "ethernet_speed": "2.5 Gbps",
+                    "connected_eero_id": "eero_office_gw",
+                    "connected_eero_name": "Gateway Rack Ufficio",
+                    "download_rate_mbps": 12.5,
+                    "upload_rate_mbps": 18.2,
+                    "rx_bytes": 85000200000,
+                    "tx_bytes": 94000300000,
+                    "paused": False,
+                },
+                {
+                    "id": "dev_off_02",
+                    "mac": "74:D4:35:12:34:56",
+                    "hostname": "Workstation-Threadripper",
+                    "nickname": "Dev Workstation Linux",
+                    "ip": "192.168.10.150",
+                    "connected": True,
+                    "wireless": True,
+                    "connection_type": "wireless",
+                    "wireless_band": "6GHz",
+                    "frequency_band": "6 GHz",
+                    "channel": 85,
+                    "signal_rssi": -42,
+                    "rx_bitrate": "4320.0 MBit/s",
+                    "phy_rate": "4320.0 MBit/s",
+                    "connected_eero_id": "eero_office_lab",
+                    "connected_eero_name": "Laboratorio & Workstation",
+                    "download_rate_mbps": 65.4,
+                    "upload_rate_mbps": 12.0,
+                    "rx_bytes": 45000100000,
+                    "tx_bytes": 12000400000,
+                    "paused": False,
+                },
+                {
+                    "id": "dev_off_03",
+                    "mac": "00:25:90:88:99:AA",
+                    "hostname": "TrueNAS-Enterprise",
+                    "nickname": "Storage ZFS Primario",
+                    "ip": "192.168.10.210",
+                    "connected": True,
+                    "wireless": False,
+                    "wired": True,
+                    "connection_type": "wired",
+                    "wireless_band": "Ethernet",
+                    "frequency_band": "Ethernet",
+                    "channel": None,
+                    "signal_rssi": None,
+                    "ethernet_speed": "2.5 Gbps",
+                    "connected_eero_id": "eero_office_gw",
+                    "connected_eero_name": "Gateway Rack Ufficio",
+                    "download_rate_mbps": 4.5,
+                    "upload_rate_mbps": 8.0,
+                    "rx_bytes": 62000400000,
+                    "tx_bytes": 71000800000,
+                    "paused": False,
+                },
+                {
+                    "id": "dev_off_04",
+                    "mac": "A4:83:E7:55:66:77",
+                    "hostname": "iPad-Pro-M4",
+                    "nickname": "iPad Pro Studio",
+                    "ip": "192.168.10.122",
+                    "connected": True,
+                    "wireless": True,
+                    "connection_type": "wireless",
+                    "wireless_band": "6GHz",
+                    "frequency_band": "6 GHz",
+                    "channel": 85,
+                    "signal_rssi": -46,
+                    "rx_bitrate": "2400.0 MBit/s",
+                    "phy_rate": "2400.0 MBit/s",
+                    "connected_eero_id": "eero_office_lab",
+                    "connected_eero_name": "Laboratorio & Workstation",
+                    "download_rate_mbps": 18.2,
+                    "upload_rate_mbps": 3.1,
+                    "rx_bytes": 15000200000,
+                    "tx_bytes": 3500100200,
+                    "paused": False,
+                },
+                {
+                    "id": "dev_off_05",
+                    "mac": "00:08:E3:11:22:33",
+                    "hostname": "Cisco-IP-Phone-8861",
+                    "nickname": "VoIP Desk Phone",
+                    "ip": "192.168.10.80",
+                    "connected": True,
+                    "wireless": False,
+                    "wired": True,
+                    "connection_type": "wired",
+                    "wireless_band": "Ethernet",
+                    "frequency_band": "Ethernet",
+                    "channel": None,
+                    "signal_rssi": None,
+                    "ethernet_speed": "1.0 Gbps",
+                    "connected_eero_id": "eero_office_gw",
+                    "connected_eero_name": "Gateway Rack Ufficio",
+                    "download_rate_mbps": 0.2,
+                    "upload_rate_mbps": 0.2,
+                    "rx_bytes": 850100200,
+                    "tx_bytes": 820100400,
+                    "paused": False,
+                },
+                {
+                    "id": "dev_off_06",
+                    "mac": "F0:9F:C2:77:88:99",
+                    "hostname": "UniFi-Switch-Enterprise-8",
+                    "nickname": "Switch PoE 2.5G Rack",
+                    "ip": "192.168.10.2",
+                    "connected": True,
+                    "wireless": False,
+                    "wired": True,
+                    "connection_type": "wired",
+                    "wireless_band": "Ethernet",
+                    "frequency_band": "Ethernet",
+                    "channel": None,
+                    "signal_rssi": None,
+                    "ethernet_speed": "2.5 Gbps",
+                    "connected_eero_id": "eero_office_gw",
+                    "connected_eero_name": "Gateway Rack Ufficio",
+                    "download_rate_mbps": 0.1,
+                    "upload_rate_mbps": 0.1,
+                    "rx_bytes": 450100200,
+                    "tx_bytes": 420100100,
+                    "paused": False,
+                }
+            ],
+            "reservations": [
+                {"id": "res_off_01", "mac": "3C:22:FB:44:55:66", "ip": "192.168.10.200", "description": "Proxmox Cluster Primary"},
+                {"id": "res_off_02", "mac": "00:25:90:88:99:AA", "ip": "192.168.10.210", "description": "TrueNAS Storage"},
+            ],
+            "forwards": [
+                {"id": "fwd_off_01", "ip": "192.168.10.200", "port_from": 8006, "port_to": 8006, "protocol": "tcp", "description": "Proxmox WebUI"},
+                {"id": "fwd_off_02", "ip": "192.168.10.210", "port_from": 443, "port_to": 443, "protocol": "tcp", "description": "TrueNAS HTTPS"},
+            ],
+            "profiles": [
+                {
+                    "id": "prof_off_01",
+                    "url": "/2.2/profiles/prof_off_01",
+                    "name": "Dev & DevOps",
+                    "paused": False,
+                    "devices": [
+                        {"id": "dev_off_01", "url": "/2.2/devices/dev_off_01", "mac": "3c:22:fb:44:55:66", "nickname": "Hypervisor Proxmox VE", "hostname": "Proxmox-Cluster-01", "ip": "192.168.10.200", "connected": True, "paused": False},
+                        {"id": "dev_off_02", "url": "/2.2/devices/dev_off_02", "mac": "74:d4:35:12:34:56", "nickname": "Dev Workstation Linux", "hostname": "Workstation-Threadripper", "ip": "192.168.10.150", "connected": True, "paused": False},
+                    ]
+                },
+                {
+                    "id": "prof_off_02",
+                    "url": "/2.2/profiles/prof_off_02",
+                    "name": "Enterprise Storage",
+                    "paused": False,
+                    "devices": [
+                        {"id": "dev_off_03", "url": "/2.2/devices/dev_off_03", "mac": "00:25:90:88:99:aa", "nickname": "Storage ZFS Primario", "hostname": "TrueNAS-Enterprise", "ip": "192.168.10.210", "connected": True, "paused": False},
+                    ]
+                }
+            ]
+        }
+
+        self._demo_networks_store = {
+            "network_demo_mesh_01": net1,
+            "network_demo_mesh_02": net2,
+        }
+
+        active_id = self.current_network_id if self.current_network_id in self._demo_networks_store else "network_demo_mesh_01"
+        return self._demo_networks_store[active_id]
+
     def _get_demo_account(self) -> Dict[str, Any]:
         return {
             "name": self._demo_state["account"]["name"],
@@ -3420,9 +3805,16 @@ class EeroClient:
             "networks": {
                 "data": [
                     {
-                        "id": self._demo_state["network"]["id"],
-                        "name": self._demo_state["network"]["name"],
-                        "url": f"/2.2/networks/{self._demo_state['network']['id']}"
+                        "id": "network_demo_mesh_01",
+                        "name": "Casa Rossi Mesh 6E",
+                        "url": "/2.2/networks/network_demo_mesh_01",
+                        "role": "owner",
+                    },
+                    {
+                        "id": "network_demo_mesh_02",
+                        "name": "Ufficio & Studio Pro Mesh",
+                        "url": "/2.2/networks/network_demo_mesh_02",
+                        "role": "admin",
                     }
                 ]
             }
@@ -3458,6 +3850,59 @@ class EeroClient:
             norm = self._normalize_device(d)
             normalized_list.append(norm)
         return normalized_list
+
+    async def get_device_data_usage(self, network_id: Optional[str] = None) -> Dict[str, Any]:
+        """Recupera l'utilizzo dati aggregato dei dispositivi per la rete attiva (Fase 3 - Insights Suite)."""
+        net_id = network_id or self.current_network_id
+        if not net_id:
+            return {"status": "error", "message": "Nessuna rete selezionata", "devices": []}
+
+        if self.is_demo_mode:
+            demo_devices = self._get_demo_devices()
+            results = []
+            for d in demo_devices:
+                rx_b = float(d.get("rx_bytes") or 0)
+                tx_b = float(d.get("tx_bytes") or 0)
+                results.append({
+                    "mac": d.get("mac"),
+                    "hostname": d.get("hostname"),
+                    "nickname": d.get("nickname"),
+                    "rx_bytes": rx_b,
+                    "tx_bytes": tx_b,
+                    "total_bytes": rx_b + tx_b,
+                    "download_rate_mbps": d.get("download_rate_mbps", 0.0),
+                    "upload_rate_mbps": d.get("upload_rate_mbps", 0.0),
+                })
+            return {"status": "success", "network_id": net_id, "devices": results}
+
+        try:
+            async with self._client_session() as client:
+                resp = await client.get(
+                    f"{EERO_API_BASE}/networks/{net_id}/data_usage/devices",
+                    headers=self._get_headers()
+                )
+                if resp.status_code == 200:
+                    data = resp.json().get("data", {})
+                    return {"status": "success", "network_id": net_id, "data": data}
+        except Exception as e:
+            logger.debug(f"Endpoint /data_usage/devices non disponibile o fallito ({e}), fallback a telemetria live.")
+
+        devices = await self.get_devices()
+        results = []
+        for d in devices:
+            rx_b = float(d.get("rx_bytes") or 0)
+            tx_b = float(d.get("tx_bytes") or 0)
+            results.append({
+                "mac": d.get("mac"),
+                "hostname": d.get("hostname"),
+                "nickname": d.get("nickname"),
+                "rx_bytes": rx_b,
+                "tx_bytes": tx_b,
+                "total_bytes": rx_b + tx_b,
+                "download_rate_mbps": d.get("download_rate_mbps", 0.0),
+                "upload_rate_mbps": d.get("upload_rate_mbps", 0.0),
+            })
+        return {"status": "success", "network_id": net_id, "devices": results}
 
 
 # Istanza singleton client eero

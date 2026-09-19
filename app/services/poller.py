@@ -62,6 +62,17 @@ class BackgroundPoller:
                 pass
         logger.info("Background Poller stopped.")
 
+    def invalidate_cache(self):
+        """Invalida completamente la cache in RAM per consentire l'hot-swap immediato tra reti."""
+        self.cached_network = {}
+        self.cached_eeros = []
+        self.cached_devices = []
+        self.cached_profiles = []
+        self.cached_health_score = 100
+        self.cached_health_details = {}
+        self._prev_device_metrics = {}
+        logger.info("Poller RAM cache invalidated.")
+
     def get_cached_state(self) -> Dict[str, Any]:
         """Restituisce istantaneamente lo stato in RAM con latenza zero."""
         return {
@@ -74,6 +85,8 @@ class BackgroundPoller:
             "last_poll_time": self._last_poll_time.isoformat() if self._last_poll_time else None,
             "is_authenticated": eero_client.is_authenticated,
             "demo_mode": settings.demo_mode or (eero_client.user_token and eero_client.user_token.startswith("demo_")),
+            "active_network_id": eero_client.current_network_id,
+            "available_networks": eero_client.get_available_networks(),
         }
 
     async def poll_once(self):
@@ -764,6 +777,19 @@ class BackgroundPoller:
                 ]
                 if wireless_samples:
                     asyncio.create_task(db_service.record_device_signal_samples(wireless_samples, is_demo=0))
+
+            # 3.6 Campionamento continuo Utilizzo Dati Dispositivi (v1.5.0 Insights Suite)
+            try:
+                curr_net = str(eero_client.current_network_id or "default")
+                is_demo_flag = 1 if getattr(eero_client, "is_demo_mode", False) else 0
+                usage_samples = [
+                    d for d in enriched_devices
+                    if d.get("mac") and (d.get("rx_bytes") is not None or d.get("download_rate_mbps") is not None)
+                ]
+                if usage_samples:
+                    asyncio.create_task(db_service.record_device_usage_samples(usage_samples, network_id=curr_net, is_demo=is_demo_flag))
+            except Exception as usage_err:
+                logger.debug(f"Device usage sampling error: {usage_err}")
 
             # Rilevamento nodi eero offline (Issue #34)
             for node in eeros:

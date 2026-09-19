@@ -365,6 +365,15 @@ CHANGELOG_SUMMARY_IT = """# Changelog - Sommario Versioni
 
 Di seguito sono riassunti i titoli principali delle release. Il registro completo con tutti i dettagli tecnici è consultabile su GitHub.
 
+## v1.5.0
+* **Multi-Network Fleet Management & Hot-Swap Dinamico (Issue #22):** Gestione di account multi-rete eero con switch immediato e conservazione della rete attiva nei cicli di polling.
+* **Intelligent Address Pruning & Esclusione IPv6 DNS (Issue #31 & #30):** Pruning automatico di IP obsoleti e lease SLAAC IPv6 scaduti su AdGuard Home e DNS multipli.
+* **Device Data Usage Insights Suite:** Nuova scheda "Consumo Dati" con selettore temporale (Ultime 24h, 7 Giorni, 30 Giorni) e grafici Chart.js per dispositivo.
+* **Widget Top Bandwidth Hogs:** Monitoraggio in tempo reale dei dispositivi che consumano più banda nella rete con accesso diretto ai dettagli.
+* **Simulatore Multi-Rete in Demo Mode:** Supporto dual-network per simulare reti multiple indipendenti (Casa Rossi Mesh 6E e Ufficio & Studio Pro Mesh).
+
+---
+
 ## v1.4.02
 * **Fix Lock SQLite all'Avvio durante la Pulizia dei Dati Mock Speedtest (Issue #35)**
 
@@ -495,6 +504,15 @@ Di seguito sono riassunti i titoli principali delle release. Il registro complet
 CHANGELOG_SUMMARY_EN = """# Changelog - Release Summary
 
 Below is a summary of the main release highlights. The complete changelog with all technical details is available on GitHub.
+
+## v1.5.0
+* **Multi-Network Fleet Management & Dynamic Hot-Swap (Issue #22):** Multi-network eero account switching with instant active network persistence across polling cycles.
+* **Intelligent Address Pruning & IPv6 DNS Exclusions (Issue #31 & #30):** Automated pruning of obsolete IP addresses and expired SLAAC IPv6 leases on AdGuard Home and multi-DNS sync.
+* **Device Data Usage Insights Suite:** New "Data Usage" tab per device with time-range selector (Last 24h, 7 Days, 30 Days) and Chart.js telemetry charts.
+* **Top Bandwidth Hogs Widget:** Real-time ranking of top bandwidth-consuming clients with 1-click drill-down into device analytics.
+* **Dual-Network Simulator in Demo Mode:** Simultaneous independent mock environments (Home Mesh 6E and Office & Studio Pro Mesh).
+
+---
 
 ## v1.4.02
 * **Fix SQLite Lock on Startup during Mock Speedtest Data Purge (Issue #35)**

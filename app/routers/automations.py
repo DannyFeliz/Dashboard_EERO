@@ -52,11 +52,15 @@ class DNSInstanceModel(BaseModel):
     last_sync_time: Optional[str] = ""
     last_sync_status: Optional[str] = ""
     last_sync_count: Optional[int] = 0
+    prune_stale_ips: Optional[bool] = Field(True, description="Pota automaticamente indirizzi SLAAC obsoleti e lease scaduti (Issue #31)")
+    drop_ipv6: Optional[bool] = Field(False, description="Esclude completamente tutti gli indirizzi IPv6 dalla sincronizzazione DNS")
 
 
 class DNSSettingsRequest(BaseModel):
     enabled: bool = Field(False, description="Abilita la sincronizzazione automatica periodica Multi-DNS")
     instances: List[DNSInstanceModel] = Field(default_factory=list, description="Elenco istanze DNS multiple (AdGuard, Pi-hole, Technitium)")
+    prune_stale_ips: Optional[bool] = Field(True, description="Default potatura indirizzi obsoleti")
+    drop_ipv6: Optional[bool] = Field(False, description="Default esclusione IPv6")
 
 
 class DNSTestRequest(BaseModel):
@@ -66,6 +70,8 @@ class DNSTestRequest(BaseModel):
 
 class DNSSyncRequest(BaseModel):
     instance_id: Optional[str] = None
+    prune_stale_ips: Optional[bool] = None
+    drop_ipv6: Optional[bool] = None
 
 
 # Modelli retrocompatibili per chiamate preesistenti AdGuard

@@ -47,7 +47,9 @@
     "theme_toggle_title": "Change Theme (Light / Dark / System)",
     "theme_light": "Light",
     "theme_dark": "Dark",
-    "theme_system": "System"
+    "theme_system": "System",
+    "switch_network_title": "Switch Active eero Network",
+    "available_networks": "Available Networks"
   },
   "dashboard": {
     "health_score": "Network Health Score",
@@ -134,6 +136,16 @@
     "tab_general": "Data & Category",
     "tab_static_ip": "Static IP (DHCP)",
     "tab_forwards": "Port Forwarding",
+    "tab_usage": "Data Usage",
+    "usage_period_title": "Device Data Usage Period",
+    "period_daily": "Last 24h",
+    "period_weekly": "7 Days",
+    "period_monthly": "30 Days",
+    "loading_usage": "Loading usage history...",
+    "usage_download": "Total Download",
+    "usage_upload": "Total Upload",
+    "usage_total": "Combined Traffic",
+    "usage_chart_hint": "Average speed sampled over time (Mbps)",
     "custom_name": "Custom Name (Cloud & Local):",
     "cloud_profile": "Cloud User Profile (eero):",
     "profile_unassigned": "⚪ No Profile (Unassigned)",
@@ -306,6 +318,8 @@
     "dns_remove_instance": "Delete Instance",
     "dns_test_single": "Test",
     "dns_sync_single": "Sync",
+    "dns_prune_stale_ips": "Intelligent IP Pruning (removes stale leases & IPv6)",
+    "dns_drop_ipv6": "Exclude IPv6 from sync",
     "dns_no_instances": "No DNS instances configured. Click 'Add DNS Instance' to start."
   },
   "manual": {
@@ -433,6 +447,15 @@
   "footer": {
     "text": "eero Custom Dashboard & Management Suite • Self-Hosted & Containerized on Docker • Zero Data Telemetry",
     "changelog": "Changelog"
+  },
+  "top_hogs": {
+    "title": "Top Bandwidth Hogs",
+    "subtitle": "Ranking of devices by largest volume of data transferred",
+    "period_daily": "Last 24h",
+    "period_weekly": "7 Days",
+    "period_monthly": "30 Days",
+    "loading": "Loading bandwidth usage...",
+    "no_data": "No device data usage recorded for this period."
   }
 }
 

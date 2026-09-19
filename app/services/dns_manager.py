@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import json
 import logging
 from datetime import datetime, timezone
@@ -433,16 +434,17 @@ class DNSManager:
     # MULTI-INSTANCE CLIENT SYNCHRONIZATION
     # =========================================================================
 
-    def _prepare_clients_payload(self, devices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Estrae e normalizza IP, MAC, hostname e tag per ciascun apparato eero."""
+    def _prepare_clients_payload(self, devices: List[Dict[str, Any]], drop_ipv6: bool = False) -> List[Dict[str, Any]]:
+        """Estrae e normalizza IP, MAC, hostname e tag per ciascun apparato eero, con filtro IPv6 opzionale."""
         ip_counts: Dict[str, int] = {}
         for dev in devices:
             raw_ips = []
             if dev.get("ip"):
                 raw_ips.append(str(dev["ip"]).strip())
-            for v6 in (dev.get("ipv6_addresses") or []):
-                if isinstance(v6, str):
-                    raw_ips.append(v6.strip())
+            if not drop_ipv6:
+                for v6 in (dev.get("ipv6_addresses") or []):
+                    if isinstance(v6, str):
+                        raw_ips.append(v6.strip())
             for single_ip in set(raw_ips):
                 if single_ip:
                     ip_counts[single_ip.lower()] = ip_counts.get(single_ip.lower(), 0) + 1
@@ -462,12 +464,13 @@ class DNSManager:
                 if ip_counts.get(ip_clean.lower(), 0) == 1:
                     ids.append(ip_clean)
 
-            for v6 in (dev.get("ipv6_addresses") or []):
-                if isinstance(v6, str) and ":" in v6 and not v6.lower().startswith("fe80:"):
-                    v6_clean = v6.strip()
-                    if not v6_clean.endswith("::1") and ip_counts.get(v6_clean.lower(), 0) == 1:
-                        if v6_clean not in ids:
-                            ids.append(v6_clean)
+            if not drop_ipv6:
+                for v6 in (dev.get("ipv6_addresses") or []):
+                    if isinstance(v6, str) and ":" in v6 and not v6.lower().startswith("fe80:"):
+                        v6_clean = v6.strip()
+                        if not v6_clean.endswith("::1") and ip_counts.get(v6_clean.lower(), 0) == 1:
+                            if v6_clean not in ids:
+                                ids.append(v6_clean)
 
             if mac and isinstance(mac, str) and len(mac) >= 12:
                 mac_clean = mac.strip().upper()
@@ -505,20 +508,102 @@ class DNSManager:
 
         return prepared
 
-    def _merge_adguard_client_data(self, existing: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
-        """Preserva al 100% tutte le regole personalizzate, filtri, upstreams e blacklist di AdGuard Home (Issue #21)."""
+    @staticmethod
+    def _is_ipv4(val: str) -> bool:
+        try:
+            return ipaddress.ip_address(val).version == 4
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _is_ipv6(val: str) -> bool:
+        try:
+            return ipaddress.ip_address(val).version == 6
+        except ValueError:
+            return False
+
+    def _merge_adguard_client_data(
+        self,
+        existing: Dict[str, Any],
+        incoming: Dict[str, Any],
+        prune_stale_ips: bool = True,
+        drop_ipv6: bool = False
+    ) -> Dict[str, Any]:
+        """Preserva regole, filtri, upstreams e pota indirizzi SLAAC obsoleti e IP scaduti (Issue #21 & #31)."""
         merged = dict(existing)
         merged["name"] = incoming.get("name") or existing.get("name")
 
         existing_ids = [str(x).strip() for x in (existing.get("ids") or []) if str(x).strip()]
         incoming_ids = [str(x).strip() for x in (incoming.get("ids") or []) if str(x).strip()]
-        merged_ids = list(existing_ids)
-        existing_ids_lower = {x.lower() for x in existing_ids}
-        for i_id in incoming_ids:
-            if i_id.lower() not in existing_ids_lower:
-                merged_ids.append(i_id)
-                existing_ids_lower.add(i_id.lower())
-        merged["ids"] = merged_ids
+
+        if drop_ipv6:
+            # Filtra via gli indirizzi IPv6
+            existing_ids = [x for x in existing_ids if not self._is_ipv6(x)]
+            incoming_ids = [x for x in incoming_ids if not self._is_ipv6(x)]
+
+        if prune_stale_ips:
+            # 1. Preserva sempre gli identificatori MAC address e custom host aliases / CIDR
+            preserved_macs = []
+            special_ids = []
+            valid_existing_ipv4 = []
+
+            for cid in existing_ids:
+                is_mac = (":" in cid and len(cid) == 17) or ("-" in cid and len(cid) == 17) or (len(cid) == 12 and all(c in "0123456789abcdefABCDEF" for c in cid))
+                if is_mac:
+                    preserved_macs.append(cid.upper())
+                    continue
+
+                if self._is_ipv4(cid):
+                    valid_existing_ipv4.append(cid)
+                elif self._is_ipv6(cid):
+                    # Gli IPv6 vecchi non vengono preservati qui: se sono ancora validi saranno in incoming_ids
+                    pass
+                else:
+                    # Non è un IP puro (es. CIDR come 192.168.1.0/24, host alias come custom-alias.lan, o tag) -> Preserva sempre!
+                    special_ids.append(cid)
+
+            # 2. Gestione indirizzi IPv4:
+            incoming_has_ipv4 = any(self._is_ipv4(x) for x in incoming_ids)
+            preserved_ipv4 = []
+            for cid in valid_existing_ipv4:
+                if cid in incoming_ids or not incoming_has_ipv4:
+                    if cid not in preserved_ipv4:
+                        preserved_ipv4.append(cid)
+
+            # 3. Costruzione unione ordinata e pulita
+            final_ids = []
+            # MACs prima
+            for m in (preserved_macs + [x for x in incoming_ids if (":" in x and len(x) == 17) or ("-" in x and len(x) == 17)]):
+                if m.upper() not in [k.upper() for k in final_ids]:
+                    final_ids.append(m.upper())
+
+            # IPv4 dopo
+            for ipv4 in (preserved_ipv4 + [x for x in incoming_ids if self._is_ipv4(x)]):
+                if ipv4.lower() not in [k.lower() for k in final_ids]:
+                    final_ids.append(ipv4)
+
+            # IPv6 solo freschi da incoming (gli SLAAC vecchi vengono potati!)
+            if not drop_ipv6:
+                for x in incoming_ids:
+                    if self._is_ipv6(x):
+                        if x.lower() not in [k.lower() for k in final_ids]:
+                            final_ids.append(x)
+
+            # Special IDs manuali (CIDR / host aliases come custom-alias.lan)
+            for s in special_ids:
+                if s not in final_ids:
+                    final_ids.append(s)
+
+            merged["ids"] = final_ids
+        else:
+            # Comportamento di unione standard senza potatura
+            merged_ids = list(existing_ids)
+            existing_ids_lower = {x.lower() for x in existing_ids}
+            for i_id in incoming_ids:
+                if i_id.lower() not in existing_ids_lower:
+                    merged_ids.append(i_id)
+                    existing_ids_lower.add(i_id.lower())
+            merged["ids"] = merged_ids
 
         if not existing.get("tags") and incoming.get("tags"):
             merged["tags"] = incoming["tags"]
@@ -530,6 +615,9 @@ class DNSManager:
         username = inst.get("username", "")
         password = inst.get("password", "")
         auth = (username.strip(), password.strip()) if username and password else None
+        
+        prune_stale = bool(inst.get("prune_stale_ips", True))
+        drop_v6 = bool(inst.get("drop_ipv6", False))
 
         existing_by_name: Dict[str, Dict[str, Any]] = {}
         existing_by_id: Dict[str, Dict[str, Any]] = {}
@@ -565,7 +653,7 @@ class DNSManager:
                                 break
 
                     if existing_client:
-                        merged = self._merge_adguard_client_data(existing_client, payload)
+                        merged = self._merge_adguard_client_data(existing_client, payload, prune_stale_ips=prune_stale, drop_ipv6=drop_v6)
                         update_payload = {"name": existing_client.get("name", name), "data": merged}
                         res = await client.post(f"{url}/control/clients/update", auth=auth, json=update_payload)
                         if res.status_code == 200:

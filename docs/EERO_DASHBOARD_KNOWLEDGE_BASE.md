@@ -1,0 +1,404 @@
+# eero Custom Dashboard & Management Suite — Knowledge Base Completa (v1.5.0)
+
+> **Documento di Riferimento per NotebookLM, Sviluppatori e Amministratori di Sistema**  
+> *Versione di riferimento del software:* **v1.5.0**  
+> *Autore e Maintainer:* **Enrico Flammini**  
+> *Licenza:* **MIT (Open Source)**  
+> *Repository Ufficiale:* [GitHub - EnricoFlammini/Dashboard_EERO](https://github.com/EnricoFlammini/Dashboard_EERO)  
+> *Immagine Docker Ufficiale:* [`enricoflammini/eero-dashboard`](https://hub.docker.com/r/enricoflammini/eero-dashboard) (Multi-Arch `linux/amd64`, `linux/arm64`)
+
+---
+
+## Indice dei Contenuti
+
+1. [Panoramica del Progetto & Visione](#1-panoramica-del-progetto--visione)
+2. [Architettura del Sistema & Stack Tecnologico](#2-architettura-del-sistema--stack-tecnologico)
+3. [Autenticazione Cloud eero & Gestione Sessione](#3-autenticazione-cloud-eero--gestione-sessione)
+4. [Funzionalità Chiave della Suite](#4-funzionalità-chiave-della-suite)
+   * 4.1 [Multi-Network Fleet Management & Hot-Swap (v1.5.0 - Issue #22)](#41-multi-network-fleet-management--hot-swap-v150---issue-22)
+   * 4.2 [Intelligent Address Pruning & Esclusione IPv6 DNS (v1.5.0 - Issue #31 & #30)](#42-intelligent-address-pruning--esclusione-ipv6-dns-v150---issue-31--30)
+   * 4.3 [Device Data Usage Insights Suite & Top Bandwidth Hogs (v1.5.0)](#43-device-data-usage-insights-suite--top-bandwidth-hogs-v150)
+   * 4.4 [Windows 11 Fluent Design & Dual-Theme Engine (v1.4.0)](#44-windows-11-fluent-design--dual-theme-engine-v140)
+   * 4.5 [Sidebar Navigation Collassabile & Controlli Rapidi (v1.4.0)](#45-sidebar-navigation-collassabile--controlli-rapidi-v140)
+   * 4.6 [Network Health Score Breakdown a 4 Pilastri (v1.4.0 - Issue #15)](#46-network-health-score-breakdown-a-4-pilastri-v140---issue-15)
+   * 4.7 [Multi-Engine DNS Synchronizer (AdGuard, Pi-hole, Technitium)](#47-multi-engine-dns-synchronizer-adguard-pi-hole-technitium)
+   * 4.8 [Storicizzazione Segnale Wi-Fi RSSI & Mesh Coverage (v1.4.0)](#48-storicizzazione-segnale-wi-fi-rssi--mesh-coverage-v140)
+   * 4.9 [Auto-Update Docker In-App a 1-Clic (/api/system/update)](#49-auto-update-docker-in-app-a-1-clic-apisystemupdate)
+   * 4.10 [Prenotazioni DHCP & Port Forwarding](#410-prenotazioni-dhcp--port-forwarding)
+   * 4.11 [Gaming Focus Mode (Bassa Latenza)](#411-gaming-focus-mode-bassa-latenza)
+   * 4.12 [Smart Guest Wi-Fi & QR Code Dual-Theme](#412-smart-guest-wi-fi--qr-code-dual-theme)
+   * 4.13 [Notifiche Telegram, Webhook & Daily Digest](#413-notifiche-telegram-webhook--daily-digest)
+   * 4.14 [Speed Test & Analisi Prestazioni Gateway](#414-speed-test--analisi-prestazioni-gateway)
+   * 4.15 [Modalità Demo (Simulatore Integrato Dual-Network)](#415-modalità-demo-simulatore-integrato-dual-network)
+5. [Specifiche del Database SQLite (`metrics.db`)](#5-specifiche-del-database-sqlite-metricsdb)
+6. [Catalogo Completo API REST (Endpoint Reference)](#6-catalogo-completo-api-rest-endpoint-reference)
+7. [Variabili d'Ambiente & Configurazione (`.env`)](#7-variabili-dambiente--configurazione-env)
+8. [Storico Bug Risolti, Cause Radice (RCA) & Issue di Riferimento](#8-storico-bug-risolti-cause-radice-rca--issue-di-riferimento)
+9. [Guida al Troubleshooting & FAQ per l'Utente](#9-guida-al-troubleshooting--faq-per-lutente)
+
+---
+
+## 1. Panoramica del Progetto & Visione
+
+**eero Custom Dashboard & Management Suite** è un'applicazione web containerizzata e self-hosted progettata per colmare il divario tra l'ecosistema mobile proprietario di **Amazon eero** e le esigenze avanzate di utenti prosumer, sistemisti e appassionati di homelab.
+
+### Principi Fondamentali
+1. **Telemetria Hardware Autentica e Certificata al 100%:** Rifiuto categorico di metriche fittizie o stime sintetiche; tutti i dati (bande Wi-Fi 2.4/5/6 GHz, canali radio, bitrate PHY, potenze RSSI, indirizzi IP, lease DHCP, porte fisiche WAN/LAN) derivano direttamente dalla telemetria ufficiale eero.
+2. **Zero-Latency In-Memory RAM Cache:** Un motore asincrono di polling in background interroga periodicamente le API cloud di eero, mantenendo lo stato sincronizzato in memoria RAM. L'interfaccia utente web risponde a tutte le richieste in **0 ms**, proteggendo l'account da rate-limiting cloud.
+3. **Zero Telemetria Esterna & Privacy-First:** Nessuna raccolta di telemetria analitica verso terzi. I dati di rete rimangono confinati nel container Docker locale e nel volume SQLite persistente.
+4. **Resilienza e Isolamento Demo:** Separazione rigorosa tra la sessione Live e la modalità Demo/Simulatore, permettendo di testare e validare tutte le funzioni senza inviare comandi reali alla rete fisica e senza sovrascrivere il token di sessione dell'utente.
+
+---
+
+## 2. Architettura del Sistema & Stack Tecnologico
+
+### Stack Tecnologico
+* **Backend:** Python 3.12 (`python:3.12-slim-bookworm`), FastAPI >= 0.115, Uvicorn >= 0.32, Pydantic v2.
+* **HTTP Client & Connection Pooling:** `httpx.AsyncClient` con DNS cache in memoria (`InMemoryDnsCache`, TTL 300s) e Keep-Alive per minimizzare l'overhead di handshaking TLS verso `api-user.e2ro.com`.
+* **Database Relazionale Locale:** SQLite in modalità WAL (*Write-Ahead Logging*) gestito asincronamente con `aiosqlite`.
+* **Frontend:** Architettura Single-Page Application reattiva e ultraleggera con Semantic HTML5, Vanilla CSS e Tailwind CSS, Alpine.js (v3.14+) per il reactive data binding e Chart.js (v4.4+) per i grafici temporali.
+* **Containerizzazione:** Immagini Docker multi-architettura (`linux/amd64` per PC/Server x86 e `linux/arm64` per Raspberry Pi / Apple Silicon).
+
+### Diagramma dei Componenti
+
+```
+ +-------------------------------------------------------------------------+
+ |                              FRONTEND SPA                               |
+ |       Alpine.js 3.14 + Tailwind CSS + Windows 11 Fluent Design System   |
+ +--------------------+-------------------------------+--------------------+
+                      |                               |
+              HTTP/JSON (0 ms)                REST API (Commands)
+                      v                               v
+ +--------------------+-------------------------------+--------------------+
+ |                        FASTAPI ROUTERS LAYER                            |
+ |  /api/network | /api/devices | /api/automations | /api/metrics | ...     |
+ +--------------------+-------------------------------+--------------------+
+                      |                               |
+                      v                               v
+ +--------------------+----------------+    +---------+--------------------+
+ |       BACKGROUND POLLER (RAM)       |    |         SQLITE ENGINE        |
+ |  • Cache In-Memory (Zero Rate-Limit)|    |  • aiosqlite (WAL Mode)      |
+ |  • Campionamento Segnale RSSI       |    |  • metrics.db persistente    |
+ |  • Campionamento Delta Traffico     |    |  • Dispositivi Noti          |
+ |  • Calcolo Dinamico Health Score    |    |  • Storico Speedtest & Usage |
+ +--------------------+----------------+    +------------------------------+
+                      |
+           Async HTTPS (TLS + DNS Cache)
+                      v
+ +-------------------------------------------------------------------------+
+ |                        AMAZON EERO CLOUD REST API                       |
+ |             api-user.e2ro.com (Endpoint 2.2 / Login 2FA OTP)            |
+ +-------------------------------------------------------------------------+
+```
+
+---
+
+## 3. Autenticazione Cloud eero & Gestione Sessione
+
+### Flusso di Autenticazione Ufficiale (2FA OTP)
+1. L'utente inserisce il proprio numero di telefono internazionale (es. `+393331234567`) o la propria email dell'account Amazon/eero.
+2. Il server invoca l'endpoint cloud `POST /2.2/login` ricevendo un `user_token` temporaneo.
+3. eero invia all'utente un codice di verifica a 6 cifre (One-Time Password via SMS o email).
+4. L'utente invia il codice al dashboard: il sistema invoca `POST /2.2/login/verify` confermando la sessione e ottenendo il token di autenticazione definitivo permanente.
+5. Il token e l'identificativo della rete attiva vengono memorizzati in `data/session.json` (volume Docker montato `/app/data`).
+
+### Token Persistente da Variabile d'Ambiente
+È possibile impostare `EERO_USER_TOKEN` direttamente nel file `.env` o nel `docker-compose.yml`. All'avvio, il sistema verifica la presenza del token configurato ed effettua il bypass automatico del login interattivo.
+
+### Preservazione Token Reale in Demo Mode
+Quando l'utente attiva la **Modalità Demo**, il token Live reale viene preservato in `saved_live_token`. L'applicazione commuta l'ambiente sui dati simulati senza invalidare né cancellare il cookie di sessione autenticato. Facendo clic su *"Torna a Live"*, la dashboard ripristina la sessione autenticata senza dover ripetere la 2FA.
+
+---
+
+## 4. Funzionalità Chiave della Suite
+
+### 4.1 Multi-Network Fleet Management & Hot-Swap (v1.5.0 - Issue #22)
+* **Contesto & Risoluzione:** Utenti che gestiscono molteplici reti eero sotto un unico account (abitazione principale, ufficio, seconda casa, rete dei genitori) in precedenza venivano forzati alla sola prima rete restituita dall'API (`networks[0]`).
+* **Mappatura Completa dell'Account:** Ispezione di tutte le chiavi dell'account eero: `networks`, `shared_networks`, `admin_networks` e chiamata di fallback a `/2.2/networks`.
+* **Hot-Swap Dinamico:** Cambio a caldo della rete selezionata tramite l'endpoint `POST /api/network/switch` con payload `{"network_id": "..."}`.
+* **Persistenza Rete Attiva:** La scelta dell'utente viene salvata in `current_network_id` sia in RAM sia su disco in `session.json`. Durante ogni ciclo di polling in background, il sistema interroga esclusivamente la rete attiva scelta, prevenendo reset involontari.
+* **UI Windows 11 Fluent Dropdown:** Se l'account gestisce $\ge 2$ reti, il nome della rete nell'header diventa un menu a tendina interattivo con chevron e indicatore del numero di nodi e client connessi.
+* **Dual-Network in Demo Mode:** Include due reti simulate (*"Casa Rossi Mesh 6E"* e *"Ufficio & Studio Pro Mesh"*) per testare e mostrare lo switch in tempo reale.
+
+### 4.2 Intelligent Address Pruning & Esclusione IPv6 DNS (v1.5.0 - Issue #31 & #30)
+* **Contesto & Risoluzione:** La sincronizzazione con AdGuard Home causava l'accumulo di centinaia di indirizzi IPv6 SLAAC temporanei e vecchi lease DHCP per il medesimo dispositivo, congestionando la tabella client di AdGuard.
+* **Riconciliazione Deterministica con `ipaddress`:** Il metodo `_merge_adguard_client_data` di `DNSManager` classifica gli identificatori mediante analisi deterministica:
+  * **MAC Address hardware:** Preservati sempre.
+  * **Custom CIDR subnet e Host Aliases:** Preservati sempre (es. `custom-alias.lan`, `storage.local`, `192.168.4.0/24`).
+  * **Indirizzi IPv4:** Viene mantenuto l'IP attivo; se il dispositivo è offline, si preserva l'ultimo noto.
+  * **Indirizzi IPv6 SLAAC:** Vengono potati chirurgicamente tutti gli indirizzi IPv6 temporanei non più presenti nella telemetria attiva di eero.
+* **Controlli per Istanza DNS:**
+  * `prune_stale_ips` (default: `true`): Abilita la pulizia dei lease e SLAAC obsoleti.
+  * `drop_ipv6` (default: `false`): Esclude totalmente gli indirizzi IPv6 dalla sincronizzazione per infrastrutture con stack locale esclusivamente IPv4.
+
+### 4.3 Device Data Usage Insights Suite & Top Bandwidth Hogs (v1.5.0)
+* **Telemetria Consumi per Dispositivo:** Tabella SQLite dedicata `device_usage_history` con indici compositi per MAC e timestamp.
+* **Campionamento Delta Traffico:** Ad ogni ciclo del poller vengono calcolati il delta di byte trasferiti in download e upload e la velocità effettiva di trasferimento in Mbps.
+* **Tab 4 "Consumo Dati" nel Modale Dispositivo:**
+  * Selettore di intervallo temporale: **Ultime 24h** (campionamento orario), **7 Giorni** (giornaliero), **30 Giorni** (mensile).
+  * KPI aggregati: **Download Totale**, **Upload Totale**, **Traffico Combinato**.
+  * Grafico temporale interattivo Chart.js con linee per download (blu) e upload (verde smeraldo).
+* **Widget Dashboard "Top Bandwidth Hogs":** Card nella schermata principale con la classifica dei dispositivi che consumano più dati nella rete, evidenziando i primi 3 classificati (Oro, Argento, Bronzo) e offrendo l'apertura con 1-click del dettaglio dispositivo.
+
+### 4.4 Windows 11 Fluent Design & Dual-Theme Engine (v1.4.0)
+* Materiali visivi Mica e Acrylic con trasparenze graduate in CSS Vanilla.
+* Font Segoe UI Variable con fallback su Inter e JetBrains Mono per dati di rete (IP, MAC, Mbps).
+* Motore a doppio tema (Chiaro / Scuro / Sistema) con script anti-FOUC nell'head che previene sfarfallii all'avvio.
+* Riadattamento cromatico dinamico delle griglie e delle palette di Chart.js al cambio tema.
+
+### 4.5 Sidebar Navigation Collassabile & Controlli Rapidi (v1.4.0)
+* Barra di navigazione verticale espandibile (`256px`) e collassabile (`68px`) con memoria di stato in `localStorage`.
+* Icone perfettamente centrate a 44x44px in modalità compatta con micro-badge d'angolo per il conteggio dei client.
+* Controlli rapidi integrati: pulsante **Gaming Mode** e pulsante **Simulatore Rete (Demo Mode)** con indicatore verde smeraldo pulsante quando la modalità demo è attiva.
+
+### 4.6 Network Health Score Breakdown a 4 Pilastri (v1.4.0 - Issue #15)
+Algoritmo ponderato che calcola un punteggio di salute da 0 a 100% analizzando 4 pilastri:
+1. **Topologia Mesh & Nodi (35 pt):** Presenza e stabilità del Gateway, stato operativo dei nodi (`online`, `rebooting`, `offline`), qualità del backhaul cablato o wireless (6 GHz / 5 GHz).
+2. **Gateway WAN & Connettività (25 pt):** Stato uplink internet, disponibilità IP pubblico, latenza ping verso gateway e server speedtest.
+3. **Qualità Segnale Wi-Fi Client (25 pt):** Valutazione della distribuzione RSSI dei dispositivi wireless (percentuale di client con segnale $\ge -65\text{ dBm}$ vs deboli $< -75\text{ dBm}$).
+4. **Distribuzione Spettro & Canali (15 pt):** Bilanciamento dei client tra le bande 6 GHz, 5 GHz e 2.4 GHz per prevenire saturazione sui 2.4 GHz.
+
+Finestra modale con spiegazione dettagliata in bilingue, elenco delle penalità attive per dispositivo/nodo e raccomandazioni correttive concrete.
+
+### 4.7 Multi-Engine DNS Synchronizer (AdGuard, Pi-hole, Technitium)
+* Sincronizzazione automatica e continua dei nomi host e degli indirizzi IP dei dispositivi verso server DNS locali.
+* Supporto per istanze simultanee eterogenee:
+  * **AdGuard Home:** Autenticazione HTTP Basic, tag client (`device_laptop`, `device_phone`, ecc.), upstreams personalizzati.
+  * **Pi-hole:** Autenticazione token WEBPASSWORD / session SID, gestione `/admin/api.php?customdns`.
+  * **Technitium DNS Server:** Autenticazione session token, creazione zone autoritative PTR e record A/AAAA.
+* Test di connettività per singola istanza o globale e pulsante "Sync Now".
+
+### 4.8 Storicizzazione Segnale Wi-Fi RSSI & Mesh Coverage (v1.4.0)
+* Tabella SQLite `device_signal_history`.
+* Rilevamento continuo del livello RSSI (dBm), banda e frequenza.
+* Indicatore visivo del segnale medio dell'intera abitazione.
+* "Weak Signal Watchlist": monitoraggio dei dispositivi con segnale critico ($< -75\text{ dBm}$) con consigli per il riposizionamento dei nodi mesh.
+
+### 4.9 Auto-Update Docker In-App a 1-Clic (`/api/system/update`)
+* Verifica oraria di nuove versioni disponibili confrontando i tag su Docker Hub e GitHub Releases.
+* Badge animato nell'header quando è disponibile un aggiornamento.
+* Ricreazione automatica del container in 1 clic tramite socket Docker (`/var/run/docker.sock`), webhook Watchtower o istruzioni assistite da riga di comando.
+
+### 4.10 Prenotazioni DHCP & Port Forwarding
+* Visualizzazione istantanea delle prenotazioni IP statiche con badge dedicato nella tabella principale.
+* Risoluzione preventiva dei conflitti di IP (segnalazione di collisioni con subnet o altri client).
+* Gestione completa del Port Forwarding cloud eero (porta esterna WAN, porta interna LAN, protocollo TCP/UDP, descrizione del servizio).
+
+### 4.11 Gaming Focus Mode (Bassa Latenza)
+* Automazione low-latency con un solo clic: mette temporaneamente in pausa il traffico di background di apparati secondari, TV o dispositivi IoT per azzerare bufferbloat e jitter durante videoconferenze o sessioni di gioco online.
+
+### 4.12 Smart Guest Wi-Fi & QR Code Dual-Theme
+* Generazione istantanea del QR Code standard Wi-Fi (`WIFI:S:...;T:WPA;P:...;;`) per la connessione immediata degli ospiti senza digitare la chiave di rete.
+* Rendering dual-theme: matrice con sfondo bianco puro in Light Mode e ardesia scuro in Dark Mode per garantire scansione ottica ottimale da qualsiasi fotocamera.
+* Attivazione/disattivazione della rete ospiti cloud e generazione di password casuali robuste.
+
+### 4.13 Notifiche Telegram, Webhook & Daily Digest
+* **Intruder Alert (Nuovo Dispositivo):** Alert immediato all'apparire di un nuovo MAC address non presente nella tabella SQLite `known_devices`.
+* **Mesh Node Offline:** Notifica tempestiva in caso di caduta di un nodo mesh.
+* **Daily Digest:** Report serale (ore 21:00) con riepilogo su stabilità di rete, velocità WAN, stato nodi e ripartizione bande.
+* Supporto per bot Telegram e webhook JSON generici compatibili con Home Assistant.
+
+### 4.14 Speed Test & Analisi Prestazioni Gateway
+* Esecuzione di speed test tramite il modem gateway eero (misurazione della velocità reale WAN verso l'ISP).
+* Storico delle misurazioni archiviato su SQLite con grafici di Download, Upload e Latenza Ping.
+* Protezione e purga automatica dei dati di test mock (`912.45 Mbps / 298.10 Mbps`) per prevenire alterazioni dello storico reale (Issue #35).
+
+### 4.15 Modalità Demo (Simulatore Integrato Dual-Network)
+* Simulazione realistica completa a zero configurazione, senza bisogno di credenziali eero.
+* Due reti simulate:
+  1. **Casa Rossi Mesh 6E:** Topologia a 3 nodi con gateway eero Pro 6E, nodi mesh wireless 6 GHz e dispositivi consumer.
+  2. **Ufficio & Studio Pro Mesh:** Rete avanzata con gateway eero Max 7, porte 2.5/10 Gbps, nodi extender PoE e server locali (Proxmox, TrueNAS, switch gestiti).
+
+---
+
+## 5. Specifiche del Database SQLite (`metrics.db`)
+
+Il database si trova in `data/metrics.db` (percorso configurabile via `DATA_DIR`). Viene aperto in modalità WAL (`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`) per garantire massima concorrenza tra letture e scritture asincrone.
+
+### Tabelle dello Schema
+
+#### 1. `app_settings`
+Memorizza impostazioni e preferenze dell'applicazione (DNS instances, canali di notifica, retention).
+* `key` (TEXT PRIMARY KEY)
+* `value` (TEXT)
+* `updated_at` (DATETIME)
+
+#### 2. `known_devices`
+Registro dei MAC address noti per prevenire notifiche duplicate di "nuovo dispositivo".
+* `mac_address` (TEXT PRIMARY KEY)
+* `first_seen` (DATETIME)
+* `last_seen` (DATETIME)
+* `hostname` (TEXT)
+* `ip` (TEXT)
+* `is_guest` (BOOLEAN)
+* `nickname` (TEXT)
+
+#### 3. `speedtest_history`
+Storico dei risultati dei test di velocità WAN eseguiti dal gateway eero.
+* `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
+* `timestamp` (DATETIME DEFAULT CURRENT_TIMESTAMP)
+* `download_mbps` (REAL)
+* `upload_mbps` (REAL)
+* `ping_ms` (REAL)
+* `server_name` (TEXT)
+* `source` (TEXT) — `eero_gateway` o `manual`
+
+#### 4. `device_signal_history`
+Campionamenti continui dei parametri radio Wi-Fi dei client connessi.
+* `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
+* `timestamp` (DATETIME DEFAULT CURRENT_TIMESTAMP)
+* `mac_address` (TEXT NOT NULL)
+* `hostname` (TEXT)
+* `ip` (TEXT)
+* `signal_dbm` (INTEGER)
+* `frequency_band` (TEXT) — `2.4 GHz`, `5 GHz`, `6 GHz`, `Ethernet`
+* `channel` (INTEGER)
+* `rx_rate_mbps` (REAL)
+* `connected_node_name` (TEXT)
+* `is_demo` (INTEGER DEFAULT 0)
+
+#### 5. `device_usage_history` (v1.5.0)
+Campionamento del volume dati e throughput per singolo client.
+* `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
+* `timestamp` (DATETIME DEFAULT CURRENT_TIMESTAMP)
+* `mac_address` (TEXT NOT NULL)
+* `network_id` (TEXT NOT NULL)
+* `rx_bytes` (REAL NOT NULL DEFAULT 0)
+* `tx_bytes` (REAL NOT NULL DEFAULT 0)
+* `download_mbps` (REAL NOT NULL DEFAULT 0)
+* `upload_mbps` (REAL NOT NULL DEFAULT 0)
+* `is_demo` (INTEGER DEFAULT 0)
+
+*Indici:*
+* `idx_device_usage_mac_time` (`mac_address`, `timestamp`)
+* `idx_device_usage_net_time` (`network_id`, `timestamp`)
+* `idx_device_usage_time` (`timestamp`)
+
+---
+
+## 6. Catalogo Completo API REST (Endpoint Reference)
+
+Tutti gli endpoint rispondono in formato JSON con intestazione `application/json`.
+
+| Metodo | Endpoint | Descrizione | Parametri / Payload |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/auth/status` | Stato autenticazione e modalità Demo/Live | Nessuno |
+| **POST** | `/api/auth/login` | Avvia procedura 2FA eero inviando codice OTP | `{"identifier": "+39333..."}` |
+| **POST** | `/api/auth/verify` | Verifica codice OTP e salva sessione permanente | `{"code": "123456", "user_token": "..."}` |
+| **POST** | `/api/auth/mode` | Commuta tra Modalità Demo e Modalità Live | `{"demo": true/false}` |
+| **POST** | `/api/auth/logout` | Disconnette la sessione cloud e ripulisce la cache | Nessuno |
+| **GET** | `/api/network/list` | Elenco di tutte le reti dell'account e rete attiva (v1.5.0) | Nessuno |
+| **POST** | `/api/network/switch` | Switch dinamico a caldo della rete attiva (v1.5.0) | `{"network_id": "..."}` |
+| **GET** | `/api/network/overview` | Panoramica stato WAN, nodi mesh e Health Score | Nessuno |
+| **GET** | `/api/network/top-hogs` | Classifica dispositivi con maggior consumo dati (v1.5.0) | `?period=daily|weekly|monthly&limit=5` |
+| **GET** | `/api/network/health-breakdown` | Dettaglio diagnostico a 4 pilastri dell'Health Score | Nessuno |
+| **POST** | `/api/network/refresh` | Forza re-polling immediato dai server eero Cloud | Nessuno |
+| **POST** | `/api/network/reboot` | Riavvia l'intera rete mesh eero | Nessuno |
+| **POST** | `/api/network/eeros/{serial}/reboot` | Riavvia un singolo nodo mesh specifico | Nessuno |
+| **GET** | `/api/devices` | Elenco completo di tutti i dispositivi client connessi/noti | Nessuno |
+| **GET** | `/api/devices/{mac}/usage` | Storico consumo dati per dispositivo (v1.5.0) | `?period=daily|weekly|monthly` |
+| **GET** | `/api/devices/{mac}/rules` | Prenotazioni DHCP e regole di port forwarding del client | Nessuno |
+| **POST** | `/api/devices/{mac}/rules/reservation` | Crea o aggiorna prenotazione IP statico sul cloud eero | `{"ip": "192.168.4.50"}` |
+| **DELETE** | `/api/devices/{mac}/rules/reservation` | Rimuove prenotazione IP statico dal cloud eero | Nessuno |
+| **POST** | `/api/devices/{mac}/rules/forward` | Crea regola di port forwarding per il dispositivo | `{"port_from": 80, "port_to": 80, "protocol": "tcp", "description": "Web"}` |
+| **DELETE** | `/api/devices/{mac}/rules/forward/{rule_id}` | Elimina una specifica regola di inoltro porte | Nessuno |
+| **POST** | `/api/devices/metadata` | Salva metadati locali (nome personalizzato, categoria, note, ⭐) | `{"mac": "...", "custom_name": "...", ...}` |
+| **GET** | `/api/devices/export/hosts` | Esporta lista host in formato standard `/etc/hosts` | `?domain_suffix=lan` |
+| **GET** | `/api/devices/export/adguard` | Esporta lista client in formato REST per AdGuard Home | `?include_ipv6=true/false` |
+| **GET** | `/api/automations/dns` | Elenco istanze Multi-Engine DNS e stato sincronizzazione | Nessuno |
+| **POST** | `/api/automations/dns` | Salva configurazione istanze DNS (AdGuard, Pi-hole, Technitium) | `{"enabled": true, "instances": [...]}` |
+| **POST** | `/api/automations/dns/test` | Esegue test di connettività verso istanza/e DNS | Opzionale `{"instance_id": "..."}` |
+| **POST** | `/api/automations/dns/sync` | Avvia sincronizzazione massiva immediata dei client | Opzionale `{"instance_id": "..."}` |
+| **GET** | `/api/automations/gaming` | Stato modalità a bassa latenza (Gaming Mode) | Nessuno |
+| **POST** | `/api/automations/gaming/toggle` | Attiva o disattiva la Gaming Mode | `{"enabled": true/false}` |
+| **GET** | `/api/automations/guest` | Dati e stato rete Wi-Fi Ospiti e QR Code | Nessuno |
+| **POST** | `/api/automations/guest` | Aggiorna configurazione rete ospiti (SSID, password, abilitazione) | `{"enabled": true, "name": "...", "password": "..."}` |
+| **POST** | `/api/automations/notifications/test` | Invia notifica di test su Telegram o Webhook | Nessuno |
+| **GET** | `/api/metrics/speedtest` | Storico misurazioni speed test e statistiche aggregate | Nessuno |
+| **POST** | `/api/metrics/speedtest/run` | Avvia un nuovo test di velocità sul gateway eero | Nessuno |
+| **GET** | `/api/metrics/signal/overview` | Panoramica potenza segnale Wi-Fi e Watchlist deboli | Nessuno |
+| **GET** | `/api/metrics/signal/history` | Storico temporale potenza RSSI per un client | `?mac_address=...&hours=24` |
+| **GET** | `/api/system/update/check` | Verifica disponibilità aggiornamenti Docker/GitHub | `?force=true` |
+| **POST** | `/api/system/update/trigger` | Avvia aggiornamento automatico 1-clic del container | Nessuno |
+| **GET** | `/api/manual/chapters` | Elenco capitoli e argomenti del manuale integrato | `?lang=it|en` |
+| **GET** | `/api/manual/chapter/{id}` | Contenuto HTML formattato di un capitolo del manuale | `?lang=it|en` |
+
+---
+
+## 7. Variabili d'Ambiente & Configurazione (`.env`)
+
+| Variabile | Valore Predefinito | Descrizione |
+| :--- | :--- | :--- |
+| `DATA_DIR` | `./data` | Percorso locale del volume persistente per sessioni e database |
+| `POLL_INTERVAL` | `10` | Intervallo di campionamento e polling verso eero Cloud (secondi) |
+| `HISTORY_RETENTION_DAYS` | `30` | Giorni di mantenimento storico campionamenti segnale e speedtest |
+| `SPEEDTEST_INTERVAL_HOURS` | `12` | Frequenza test di velocità pianificati automatici (ore) |
+| `DEMO_MODE` | `false` | Se `true`, forza l'avvio in modalità simulazione |
+| `EERO_USER_TOKEN` | `""` | Token permanente per bypassare il login interattivo 2FA |
+| `EERO_NETWORK_ID` | `""` | ID opzionale della rete preferita da avviare come attiva |
+| `TELEGRAM_BOT_TOKEN` | `""` | Token API Telegram per invio allarmi e digest |
+| `TELEGRAM_CHAT_ID` | `""` | ID numerico chat/canale Telegram destinatario delle notifiche |
+| `WEBHOOK_URL` | `""` | Endpoint HTTP POST per eventi JSON verso Home Assistant / script |
+| `DOCKER_SOCKET_PATH` | `/var/run/docker.sock` | Percorso socket Docker per consentire l'auto-update in-app |
+| `WATCHTOWER_URL` | `""` | URL opzionale webhook Watchtower per triggerare il pull dell'immagine |
+| `UPDATE_CHECK_INTERVAL_HOURS`| `6` | Frequenza controllo nuove versioni su Docker Hub (ore) |
+
+---
+
+## 8. Storico Bug Risolti, Cause Radice (RCA) & Issue di Riferimento
+
+Questa sezione documenta le cause radice dei bug riscontrati durante lo sviluppo e la relativa soluzione architetturale.
+
+### Issue #22 — Multi-Network Fleet Management
+* **Sintomo:** Utenti con più reti mesh eero sul proprio account (es. casa e ufficio) non potevano visualizzare né gestire la seconda rete; la dashboard restava vincolata a `networks[0]`.
+* **Causa Radice:** In `fetch_account_info()` la rete veniva forzata indiscriminatamente a `networks[0]`, sovrascrivendo qualsiasi selezione precedente ad ogni ciclo di polling.
+* **Risoluzione:** Introdotto l'attributo `available_networks`, l'endpoint REST `/api/network/switch` e la logica di conservazione di `current_network_id` in sessione persistente.
+
+### Issue #31 & Issue #30 — SLAAC IPv6 Accumulation & Stale Lease Pruning in AdGuard
+* **Sintomo:** La sincronizzazione automatica verso AdGuard Home accumulava centinaia di indirizzi IPv6 SLAAC obsoleti e vecchi lease DHCP per lo stesso client MAC, rendendo illeggibile la lista client.
+* **Causa Radice:** Il merge non distingueva tra indirizzi IP effettivi e alias host, e univa indistintamente tutti gli IP storici presenti su AdGuard con quelli in arrivo da eero.
+* **Risoluzione:** Ispezione deterministica tramite `ipaddress`. Gli identificatori non-IP (MAC, CIDR, domini personalizzati come `custom-alias.lan`) vengono sempre conservati. Gli indirizzi IPv6 SLAAC scaduti non più presenti nella telemetria attiva di eero vengono potati chirurgicamente. Aggiunta opzione per escludere totalmente gli IPv6 (`drop_ipv6`).
+
+### Issue #26 — Incorrect Primary Gateway Listed with PoE Extenders
+* **Sintomo:** Nodi extender secondari alimentati tramite iniettore PoE (es. eero Outdoor 7) venivano etichettati erroneamente come `PRIMARY GATEWAY (WAN)` anziché il router principale (eero Max 7 su porta 10G).
+* **Causa Radice:** L'algoritmo di normalizzazione si affidava al primo nodo dell'elenco o alla presenza di un link cablato, senza verificare se la porta Ethernet fosse configurata come WAN verso l'ISP.
+* **Risoluzione:** Correlazione autoritativa con l'endpoint `/2.2/networks/{id}` (`gateway_eero_id`), ispezione dell'IP gateway della subnet (es. `192.168.4.1`) e verifica esplicita del ruolo della porta (`isWanPort: true`, `role: wan`). Demotion automatica degli extender PoE a backhaul wireless.
+
+### Issue #34 — Mesh Offline Node Detection & Reboot Differentiation
+* **Sintomo:** Nodi mesh disconnessi non venivano rilevati come offline e la notifica `node_offline` non partiva.
+* **Causa Radice:** L'uso di un fallback errato `node.get("connected", True)` in `_normalize_eero_node()`, dato che l'API REST `/eeros` non espone una proprietà `connected`.
+* **Risoluzione:** Ispezione gerarchica di `heartbeat_ok`, `status` (`green`, `yellow`, `red`) e `state` (`ONLINE`, `REBOOTING`, `OFFLINE`). Distinzione esplicita dei nodi in fase di riavvio (`rebooting`) per evitare falsi allarmi durante manutenzione.
+
+### Issue #35 — Mock Speedtest Data Leakage & SQLite Lock on Startup
+* **Sintomo:** All'avvio del container appariva l'errore `OperationalError: database is locked` e nello storico dei test di velocità comparivano misurazioni fittizie TIM FTTH (`912.45 Mbps / 298.10 Mbps`).
+* **Causa Radice:** Durante l'inizializzazione dello schema, `purge_all_mock_data()` apriva una seconda connessione concorrente a SQLite mentre la transazione di `init_db()` era ancora aperta. Inoltre, i metodi di fallback su errore API autenticata ritornavano dati mock invece di generare eccezioni o riutilizzare l'ultimo stato noto.
+* **Risoluzione:** `purge_all_mock_data(conn=db)` riutilizza ora la connessione attiva all'interno della stessa transazione atomica. Rimozione di qualsiasi fallback a dati fittizi in ambiente live autenticato.
+
+---
+
+## 9. Guida al Troubleshooting & FAQ per l'Utente
+
+### D: Come posso far ripartire il container se perdo la connessione o il token scade?
+R: È sufficiente accedere all'interfaccia web: se il token è scaduto, la dashboard mostra automaticamente la schermata di login 2FA. In alternativa, è possibile eliminare il file `data/session.json` e riavviare il container per iniziare un'autenticazione pulita.
+
+### D: Il selettore di rete nell'header non compare. Perché?
+R: Il menu a tendina nell'header per il Multi-Network compare solo se l'account eero autenticato possiede **2 o più reti** configurate. Se l'account gestisce un'unica rete mesh, la dashboard mostra direttamente il nome della rete senza ingombro visivo. In modalità Demo, sono sempre presenti 2 reti per poter testare il componente.
+
+### D: Perché su AdGuard Home vedo sparire gli indirizzi IPv6 SLAAC dopo la sincronizzazione?
+R: Questa è una funzionalità introdotta nella v1.5.0 (Issue #31). I dispositivi mobili e i moderni sistemi operativi generano indirizzi IPv6 temporanei casuali (SLAAC Privacy Extensions) che scadono continuamente. La dashboard rimuove automaticamente gli indirizzi non più utilizzati, mantenendo la tabella client ordinata. Se desideri conservare tutti gli IP o disattivare questa funzione, puoi deselezionare il flag *"Pruning Intelligente IP"* nella configurazione dell'istanza DNS.
+
+### D: Come configuro l'aggiornamento automatico Docker in-app a 1-clic?
+R: Nel file `docker-compose.yml`, assicurati di aver montato il socket di Docker:
+```yaml
+volumes:
+  - ./data:/app/data
+  - /var/run/docker.sock:/var/run/docker.sock:ro
+```
+Quando la dashboard rileva una nuova release su Docker Hub, apparirà un badge pulsante nell'header. Cliccando su *"Aggiorna Ora"*, il container invocherà le API di Docker per scaricare l'immagine aggiornata e ricreare il container senza perdita di configurazione.
+
+### D: Come esportare i dati per Home Assistant o Prometheus?
+R: La dashboard espone endpoint REST pronti all'uso:
+* `GET /api/network/overview`: Metriche aggregate, stato WAN e nodi.
+* `GET /api/devices`: Array JSON di tutti i client con IP, MAC, nodo collegato, banda e potenza RSSI.
+* `GET /api/network/top-hogs`: Statistiche di consumo dati in formato JSON.
+* I webhook automatici trasmettono payload completi con eventi `new_device`, `node_offline` e `daily_digest` contenente il campo `line_stability`.

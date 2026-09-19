@@ -466,6 +466,21 @@ async def assign_device_profile(mac_address: str, payload: DeviceProfileAssignRe
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/{mac_address}/usage")
+async def get_device_usage(mac_address: str, period: str = "daily"):
+    """Restituisce lo storico dell'utilizzo dati per il dispositivo (Daily, Weekly, Monthly) - v1.5.0 Insights Suite."""
+    try:
+        is_demo_flag = 1 if getattr(eero_client, "is_demo_mode", False) else 0
+        usage_data = await db_service.get_device_usage_history(mac_address=mac_address, period=period, is_demo=is_demo_flag)
+        return {
+            "status": "success",
+            "data": usage_data
+        }
+    except Exception as e:
+        logger.error(f"Error fetching usage for device {mac_address}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{device_id_or_mac:path}")
 async def get_device_detail(device_id_or_mac: str):
     """Restituisce la scheda completa del dispositivo: stato live e metadati locali (catch-all)."""

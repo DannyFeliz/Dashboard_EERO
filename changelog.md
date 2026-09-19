@@ -4,6 +4,39 @@ Tutte le modifiche rilevanti, i miglioramenti e le correzioni di bug apportate a
 
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderisce al versionamento semantico.
 
+## [1.5.0] - 2026-09-19
+
+### 🌐 Multi-Network Fleet Management & Hot-Swap Dinamico (Issue #22)
+* **🌐 Supporto Multi-Rete per Account eero Multipli & Fleet Management:**
+  * Risolta la segnalazione [Issue #22](https://github.com/EnricoFlammini/Dashboard_EERO/issues/22) e recepita la richiesta della community (`mayhemkrew`) per supportare account eero con più reti configurate sotto lo stesso account utente (es. casa vacanze, ufficio, parenti).
+  * **Selettore Rete Integrato nell'Header (Windows 11 Fluent):** Nuovo selettore a tendina con animazione Fluent, conteggio nodi mesh e client attivi per ciascuna rete.
+  * **Persistenza dell'Elezione Rete tra i Cicli di Polling:** Il poller e l'eero client memorizzano la rete attiva selezionata dall'utente (`current_network_id`) prevenendo qualsiasi reset automatico su `networks[0]`.
+  * **API REST dedicate:**
+    * `GET /api/network/list`: Elenco completo di tutte le reti accessibili (dirette, condivise, guest, admin) con metadati di stato.
+    * `POST /api/network/switch`: Switch atomico con invalidazione istantanea della cache in memoria e re-polling immediato.
+  * **Simulatore Multi-Rete in Demo Mode:** Creazione di due ambienti simulati indipendenti (*"Casa Rossi Mesh 6E"* e *"Ufficio & Studio Pro Mesh"* con eero Max 7 e porte 2.5 Gbps) per testare e mostrare lo switch in tempo reale a zero configurazione.
+
+### 🧹 Intelligent Address Pruning & Esclusione IPv6 DNS (Issue #31 & #30)
+* **🧹 Pruning Automatico IP Obsoleti e Lease SLAAC IPv6 su AdGuard Home:**
+  * Risolta la segnalazione [Issue #31](https://github.com/EnricoFlammini/Dashboard_EERO/issues/31) e [Issue #30](https://github.com/EnricoFlammini/Dashboard_EERO/issues/30) (`jpatchMC`) per cui la sincronizzazione con AdGuard Home accumulava centinaia di indirizzi IPv6 temporanei SLAAC scaduti e vecchi lease DHCP per lo stesso client MAC.
+  * **Riconciliazione Intelligente:** Implementata la pulizia chirurgica in `_merge_adguard_client_data`: vengono conservati tutti i MAC hardware e i tag/CIDR personalizzati, mentre gli indirizzi IPv6 SLAAC non più presenti nella telemetria attiva di eero vengono rimossi automaticamente dal payload inviato ad AdGuard Home (`/control/clients/update`).
+  * **Opzioni Selettive per Istanza DNS:** Aggiunti toggle di configurazione individuali per ciascun server DNS:
+    * `prune_stale_ips`: Abilita/disabilita la potatura dei lease obsoleti.
+    * `drop_ipv6`: Esclude completamente gli indirizzi IPv6 dalla sincronizzazione per chi gestisce reti solo-IPv4.
+
+### 📈 Device Data Usage Insights Suite (ROADMAP v1.5.0)
+* **📈 Monitoraggio Storico Consumo Dati per Singolo Dispositivo:**
+  * Implementata la suite di analisi per dispositivo con nuova tabella SQLite ad alte prestazioni `device_usage_history` con indici temporali e MAC dedicati.
+  * **Campionamento Continuo Delta Traffico:** Rilevamento continuo dei volumi di download/upload e calcolo throughput effettivo (Mbps) durante i cicli di polling.
+  * **Nuova Tab 4 nel Dettaglio Dispositivo:** Scheda "Consumo Dati" con filtri temporali:
+    * **Ultime 24h** (campionamento orario/delta)
+    * **7 Giorni** (aggregazione giornaliera)
+    * **30 Giorni** (aggregazione mensile)
+  * **Grafico Interattivo Chart.js:** Visualizzazione grafica con curve di download/upload, indicatori di picco e badge di riepilogo metriche (Download Totale, Upload Totale, Traffico Combinato).
+  * **Widget Top Bandwidth Hogs nella Dashboard:** Card nella vista principale per visualizzare istantaneamente la classifica dei dispositivi che consumano più traffico nella rete, con accesso con 1 clic al dettaglio del dispositivo.
+
+---
+
 ## [1.4.02] - 2026-09-19
 
 ### ⚡ Fix Lock SQLite all'Avvio durante la Pulizia dei Dati Mock Speedtest (Issue #35)

@@ -281,3 +281,90 @@ async def update_advanced_settings(payload: AdvancedSettingsRequest):
     except Exception as e:
         logger.error(f"Failed to update advanced settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class SwitchNetworkRequest(BaseModel):
+    network_id: str = Field(..., description="ID della rete eero verso cui effettuare lo switch")
+
+
+@router.get("/list")
+async def list_available_networks():
+    """Restituisce l'elenco di tutte le reti mesh eero associate all'account (Issue #22)."""
+    try:
+        if not eero_client.available_networks and eero_client.is_authenticated:
+            await eero_client.fetch_account_info()
+        networks = eero_client.get_available_networks()
+        return {
+            "status": "success",
+            "active_network_id": eero_client.current_network_id,
+            "networks": networks
+        }
+    except Exception as e:
+        logger.error(f"Error listing available networks: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "active_network_id": eero_client.current_network_id,
+            "networks": eero_client.get_available_networks()
+        }
+
+
+@router.post("/switch")
+async def switch_network(payload: SwitchNetworkRequest):
+    """Hot-swap immediato della rete eero attiva con refresh istantaneo della cache RAM."""
+    try:
+        res = await eero_client.switch_network(payload.network_id)
+        # Invalida cache poller ed esegue polling immediato per la nuova rete
+        background_poller.invalidate_cache()
+        await background_poller._poll_and_cache()
+        cached = background_poller.get_cached_state()
+        return {
+            "status": "success",
+            "message": f"Rete passata a '{payload.network_id}' con successo.",
+            "active_network_id": eero_client.current_network_id,
+            "data": cached
+        }
+    except Exception as e:
+        logger.error(f"Error switching network: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/top-hogs")
+async def get_top_bandwidth_hogs(limit: int = 5, period: str = "daily"):
+    """Classifica dei dispositivi che hanno consumato più banda (Top Hogs) - v1.5.0 Insights Suite."""
+    try:
+        curr_net = eero_client.current_network_id
+        is_demo_flag = 1 if getattr(eero_client, "is_demo_mode", False) else 0
+        hogs = await db_service.get_top_bandwidth_hogs(network_id=curr_net, limit=limit, period=period, is_demo=is_demo_flag)
+        
+        # Fallback dai dispositivi attualmente in cache se lo storico è ancora scarso
+        if not hogs:
+            cached_devs = background_poller.cached_devices or []
+            sorted_devs = sorted(
+                cached_devs,
+                key=lambda d: float(d.get("rx_bytes") or 0) + float(d.get("tx_bytes") or 0),
+                reverse=True
+            )[:limit]
+            for d in sorted_devs:
+                rx_b = float(d.get("rx_bytes") or 0)
+                tx_b = float(d.get("tx_bytes") or 0)
+                hogs.append({
+                    "mac": d.get("mac"),
+                    "hostname": d.get("nickname") or d.get("hostname") or d.get("mac"),
+                    "rx_bytes": rx_b,
+                    "tx_bytes": tx_b,
+                    "total_bytes": rx_b + tx_b,
+                    "avg_down_mbps": float(d.get("download_rate_mbps") or 0),
+                    "avg_up_mbps": float(d.get("upload_rate_mbps") or 0),
+                })
+
+        return {
+            "status": "success",
+            "network_id": curr_net,
+            "period": period,
+            "top_hogs": hogs
+        }
+    except Exception as e:
+        logger.error(f"Error getting top bandwidth hogs: {e}")
+        return {"status": "error", "message": str(e), "top_hogs": []}
+
