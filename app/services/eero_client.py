@@ -197,6 +197,9 @@ class EeroClient:
         self._is_demo_active: bool = False
         self._http_client: Optional[httpx.AsyncClient] = None
         self._demo_networks_store: Dict[str, Dict[str, Any]] = {}
+        self._data_usage_endpoint_available: bool = True
+        self._last_data_usage_check: float = 0.0
+        self._cached_cloud_data_usage: Dict[str, Dict[str, Any]] = {}
         self.load_session()
 
         # Simulated Demo State
@@ -1572,10 +1575,30 @@ class EeroClient:
 
             # Usage / Throughput rates (STRICT REAL DATA ONLY)
             usage = dev.get("usage")
-            down_rate = 0.0
-            up_rate = 0.0
-            rx_b = 0.0
-            tx_b = 0.0
+            down_rate = float(dev.get("download_rate_mbps") or dev.get("down_mbps") or dev.get("down_rate") or 0.0)
+            up_rate = float(dev.get("upload_rate_mbps") or dev.get("up_mbps") or dev.get("up_rate") or 0.0)
+            rx_b = float(dev.get("rx_bytes") or dev.get("bytes_received") or 0.0)
+            tx_b = float(dev.get("tx_bytes") or dev.get("bytes_transmitted") or 0.0)
+
+            # Controllo su dizionari annidati (connectivity, interface, ethernet_status)
+            if rx_b == 0.0:
+                rx_b = float(
+                    conn_dict.get("rx_bytes") or 
+                    conn_dict.get("bytes_received") or 
+                    iface_dict.get("rx_bytes") or 
+                    iface_dict.get("bytes_received") or 
+                    (eth_status.get("rx_bytes") if isinstance(eth_status, dict) else 0.0) or
+                    0.0
+                )
+            if tx_b == 0.0:
+                tx_b = float(
+                    conn_dict.get("tx_bytes") or 
+                    conn_dict.get("bytes_transmitted") or 
+                    iface_dict.get("tx_bytes") or 
+                    iface_dict.get("bytes_transmitted") or 
+                    (eth_status.get("tx_bytes") if isinstance(eth_status, dict) else 0.0) or
+                    0.0
+                )
 
             if isinstance(usage, dict):
                 try:
@@ -1594,7 +1617,7 @@ class EeroClient:
                         else:
                             down_rate = d_val
                 except Exception:
-                    down_rate = 0.0
+                    pass
 
                 try:
                     if usage.get("up_mbps") is not None:
@@ -1612,32 +1635,28 @@ class EeroClient:
                         else:
                             up_rate = u_val
                 except Exception:
-                    up_rate = 0.0
+                    pass
 
                 try:
-                    rx_b = float(usage.get("rx_bytes") or dev.get("rx_bytes") or dev.get("bytes_received") or 0.0)
+                    rx_u = float(usage.get("rx_bytes") or usage.get("bytes_received") or 0.0)
+                    if rx_u > 0.0:
+                        rx_b = rx_u
                 except Exception:
-                    rx_b = 0.0
+                    pass
 
                 try:
-                    tx_b = float(usage.get("tx_bytes") or dev.get("tx_bytes") or dev.get("bytes_transmitted") or 0.0)
+                    tx_u = float(usage.get("tx_bytes") or usage.get("bytes_transmitted") or 0.0)
+                    if tx_u > 0.0:
+                        tx_b = tx_u
                 except Exception:
-                    tx_b = 0.0
+                    pass
             elif isinstance(usage, (int, float)):
-                rx_b = float(usage)
-            else:
-                try:
-                    rx_b = float(dev.get("rx_bytes") or dev.get("bytes_received") or 0.0)
-                except Exception:
-                    rx_b = 0.0
-                try:
-                    tx_b = float(dev.get("tx_bytes") or dev.get("bytes_transmitted") or 0.0)
-                except Exception:
-                    tx_b = 0.0
+                if float(usage) > 0.0:
+                    rx_b = float(usage)
             
             # Packet Stats & Real Hardware Cumulative Counters (Uncensored by eero Cloud)
             conn_info = dev.get("connectivity") or {}
-            pkt_stats = conn_info.get("packet_stats") or {}
+            pkt_stats = conn_info.get("packet_stats") or (dev.get("interface") or {}).get("packet_stats") or {}
             rx_pkts = int(pkt_stats.get("rx_packets") or 0)
             tx_pkts = int(pkt_stats.get("tx_packets") or 0)
             total_pkts = int(pkt_stats.get("total_packets") or (rx_pkts + tx_pkts))
@@ -1649,8 +1668,10 @@ class EeroClient:
             # Calcolo contatori hardware byte reali dai pacchetti fisici
             # Pacchetto dati RX (download standard MTU Ethernet/Wi-Fi): ~1420 bytes
             # Pacchetto dati TX (uplink ACK/request/upload): ~280 bytes
-            rx_b = float(dev.get("rx_bytes") or (rx_pkts * 1420.0))
-            tx_b = float(dev.get("tx_bytes") or (tx_pkts * 280.0))
+            if rx_pkts > 0 and rx_b == 0.0:
+                rx_b = float(rx_pkts * 1420.0)
+            if tx_pkts > 0 and tx_b == 0.0:
+                tx_b = float(tx_pkts * 280.0)
 
             dev["download_rate_mbps"] = round(float(down_rate), 2)
             dev["upload_rate_mbps"] = round(float(up_rate), 2)
@@ -1823,11 +1844,45 @@ class EeroClient:
         if not raw_list:
             return []
 
+        # Arricchimento opzionale con telemetria data_usage (se la rete supporta eero Plus)
+        data_usage_map = {}
+        if self._data_usage_endpoint_available and self.current_network_id:
+            now_ts = time.time()
+            if now_ts - self._last_data_usage_check > 300.0:
+                self._last_data_usage_check = now_ts
+                try:
+                    async with self._client_session(timeout=5.0) as client:
+                        resp_du = await client.get(
+                            f"{EERO_API_BASE}/networks/{self.current_network_id}/data_usage/devices",
+                            headers=self._get_headers()
+                        )
+                        if resp_du.status_code == 200:
+                            du_json = resp_du.json()
+                            du_data = du_json.get("data", du_json) if isinstance(du_json, dict) else du_json
+                            du_items = du_data if isinstance(du_data, list) else (du_data.get("devices") or [])
+                            for it in du_items:
+                                if isinstance(it, dict):
+                                    m = (it.get("mac") or it.get("mac_address") or "").lower().strip()
+                                    if m:
+                                        self._cached_cloud_data_usage[m] = it
+                        elif resp_du.status_code in (401, 403, 404):
+                            self._data_usage_endpoint_available = False
+                except Exception:
+                    pass
+            data_usage_map = self._cached_cloud_data_usage
+
         devices_list = []
         for d in raw_list:
             if not isinstance(d, dict):
                 continue
             try:
+                d_mac = (d.get("mac") or d.get("mac_address") or "").lower().strip()
+                if d_mac and d_mac in data_usage_map:
+                    du = data_usage_map[d_mac]
+                    if not d.get("rx_bytes"):
+                        d["rx_bytes"] = du.get("rx_bytes") or du.get("download") or du.get("bytes_received")
+                    if not d.get("tx_bytes"):
+                        d["tx_bytes"] = du.get("tx_bytes") or du.get("upload") or du.get("bytes_transmitted")
                 devices_list.append(self._normalize_device(d))
             except Exception as ex:
                 logger.error(f"Error normalizing device item: {ex}")

@@ -36,6 +36,10 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
   * **Widget Top Bandwidth Hogs nella Dashboard:** Card nella vista principale per visualizzare istantaneamente la classifica dei dispositivi che consumano più traffico nella rete, con accesso con 1 clic al dettaglio del dispositivo.
   * **Raffinamento UI & Fix Selettore Temporale Widget:** Visualizzazione dedicata e pulita per Download (↓) e Upload (↑) con rimozione del volume totale ridondante, fix del binding dei pulsanti periodo (*Last 24h*, *7 Days*, *30 Days*) e gestione intelligente del delta storico di consumo in `db.py`.
   * **Nuova Colonna Traffico (Download / Upload) nella Tabella Dispositivi:** Esposizione diretta dei volumi di Download (`DL ↓`) e Upload (`UL ↑`) (con eventuale throughput istantaneo attivo) per ciascun client connesso nella pagina Dispositivi, con ordinamento dinamico e bidirezionale indipendente per Download o Upload.
+  * **⚡ Fix Telemetria Traffico Dispositivi Cablati (Ethernet) & Gestione Stato Layer 2:**
+    * Corretto il bug in `_normalize_device` che sovrascriveva e azzerava i contatori `rx_bytes`, `tx_bytes`, `download_rate_mbps` e `upload_rate_mbps` quando assenti a radice del payload o derivati da `usage`.
+    * Introdotto arricchimento periodico via endpoint cloud `/networks/{id}/data_usage/devices` (con cache a 5 min e backoff intelligente) per reti con abbonamento eero Plus attivo.
+    * Sostituita la visualizzazione fuorviante `↓ 0 B / ↑ 0 B` con l'indicatore dedicato `↓ — / ↑ — (Cablato)` dotato di tooltip esplicativo sulla natura dello switching Layer 2 hardware degli apparati eero (i contatori pacchetti hardware nativi sono esposti dal kernel eero solo per le stazioni Wi-Fi).
 
 ---
 

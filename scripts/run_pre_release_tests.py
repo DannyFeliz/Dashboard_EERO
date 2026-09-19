@@ -272,6 +272,24 @@ async def run_all_tests():
         }
         pc_norm = eero_client._normalize_device(device_pc_raw)
         runner.assert_true(pc_norm["ethernet_speed"] == "1.0 Gbps", f"Client PC ethernet_speed estratto come '1.0 Gbps' (ottenuto: {pc_norm['ethernet_speed']})")
+        runner.assert_true(pc_norm["wireless"] is False, "Client cablato ha wireless=False")
+        runner.assert_true(pc_norm["connection_type"] == "wired", "Client cablato ha connection_type='wired'")
+
+        # Test 4b: Preservazione telemetria e tassi per client cablati con data usage
+        device_nas_wired = {
+            "id": "nas_qnap",
+            "hostname": "QNAP-Storage",
+            "ip": "192.168.4.60",
+            "connected": True,
+            "wireless": False,
+            "download_rate_mbps": 52.4,
+            "upload_rate_mbps": 18.2,
+            "rx_bytes": 10500200300,
+            "tx_bytes": 4200100200
+        }
+        nas_norm = eero_client._normalize_device(device_nas_wired)
+        runner.assert_true(nas_norm["download_rate_mbps"] == 52.4, f"Download rate NAS preservato a 52.4 (ottenuto: {nas_norm['download_rate_mbps']})")
+        runner.assert_true(nas_norm["rx_bytes"] == 10500200300.0, f"rx_bytes NAS preservato a 10500200300 (ottenuto: {nas_norm['rx_bytes']})")
 
         # Test 5: Nodo wireless mesh (wired: false) che ha un PC collegato via cavo (Camera di Filippo e Enea)
         node_wireless_with_pc = {
