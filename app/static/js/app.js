@@ -315,7 +315,13 @@ document.addEventListener('alpine:init', () => {
             this.loadSignalOverview();
           }, 50);
         } else if (tab === 'analytics') {
-          this.loadAnalyticsData();
+          if (this.$nextTick) {
+            this.$nextTick(() => {
+              this.loadAnalyticsData();
+            });
+          } else {
+            this.loadAnalyticsData();
+          }
         } else if (tab === 'automations' || tab === 'controls') {
           this.fetchNightMode();
           this.fetchNotificationSettings();
@@ -423,7 +429,7 @@ document.addEventListener('alpine:init', () => {
       ];
 
       charts.forEach(chart => {
-        if (!chart) return;
+        if (!chart || !chart.ctx) return;
         try {
           if (chart.options?.scales) {
             Object.values(chart.options.scales).forEach(scale => {
@@ -564,7 +570,7 @@ document.addEventListener('alpine:init', () => {
         }, 50);
       } else if (tab === 'analytics') {
         setTimeout(async () => {
-          await this.loadAnalyticsData();
+          await this.loadAnalyticsData(true);
         }, 50);
       } else if (tab === 'devices') {
         await this.fetchDevices();
@@ -3265,15 +3271,24 @@ document.addEventListener('alpine:init', () => {
     // ANALYTICS, DISTRIBUTION & ISP SLA (v1.5.0)
     // =========================================================================
     async loadAnalyticsData(force = false) {
+      if (this.analyticsLoading && !force) return;
       this.analyticsLoading = true;
       try {
         await Promise.all([
           this.fetchAnalyticsDistribution(),
-          this.fetchAnalyticsSla(this.analyticsSlaDays)
+          this.fetchAnalyticsSla(this.analyticsSlaDays, false)
         ]);
-        this.$nextTick(() => {
-          this.renderAnalyticsCharts();
-        });
+        if (this.$nextTick) {
+          this.$nextTick(() => {
+            setTimeout(() => {
+              this.renderAnalyticsCharts();
+            }, 80);
+          });
+        } else {
+          setTimeout(() => {
+            this.renderAnalyticsCharts();
+          }, 80);
+        }
       } catch (err) {
         console.error("Load analytics data error:", err);
       } finally {
@@ -3293,16 +3308,26 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async fetchAnalyticsSla(days = 30) {
+    async fetchAnalyticsSla(days = 30, renderImmediately = true) {
       this.analyticsSlaDays = days;
       try {
         const res = await fetch(`/api/analytics/isp-sla?days=${days}`);
         const data = await res.json();
         if (data.status === 'success' && data.sla) {
           this.analyticsSla = data.sla;
-          this.$nextTick(() => {
-            this.renderSlaChart();
-          });
+          if (renderImmediately) {
+            if (this.$nextTick) {
+              this.$nextTick(() => {
+                setTimeout(() => {
+                  this.renderSlaChart();
+                }, 50);
+              });
+            } else {
+              setTimeout(() => {
+                this.renderSlaChart();
+              }, 50);
+            }
+          }
         }
       } catch (err) {
         console.error("Fetch SLA error:", err);
@@ -3318,267 +3343,337 @@ document.addEventListener('alpine:init', () => {
     },
 
     renderFrequenciesChart() {
-      const canvas = document.getElementById('analyticsFrequenciesChart');
-      if (!canvas) return;
-      if (this.analyticsChartInstances['frequencies']) {
-        this.analyticsChartInstances['frequencies'].destroy();
-      }
-      const freqs = this.analyticsDistribution.frequencies || [];
-      const labels = freqs.map(f => f.band);
-      const data = freqs.map(f => f.count);
-      const colors = this.getChartThemeColors();
-
-      this.analyticsChartInstances['frequencies'] = new Chart(canvas.getContext('2d'), {
-        type: 'doughnut',
-        data: {
-          labels: labels,
-          datasets: [{
-            data: data,
-            backgroundColor: [
-              '#38bdf8', // 6 GHz
-              '#0067c0', // 5 GHz
-              '#818cf8', // 2.4 GHz
-              '#10b981'  // Ethernet
-            ],
-            borderColor: colors.isDark ? '#262626' : '#ffffff',
-            borderWidth: 2
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } }
-            }
-          },
-          cutout: '65%'
+      try {
+        const canvas = document.getElementById('analyticsFrequenciesChart');
+        if (!canvas) return;
+        if (typeof Chart !== 'undefined' && Chart.getChart(canvas)) {
+          Chart.getChart(canvas).destroy();
         }
-      });
+        if (this.analyticsChartInstances && this.analyticsChartInstances['frequencies']) {
+          try { this.analyticsChartInstances['frequencies'].destroy(); } catch (e) {}
+          delete this.analyticsChartInstances['frequencies'];
+        }
+
+        const freqs = (this.analyticsDistribution && this.analyticsDistribution.frequencies) ? this.analyticsDistribution.frequencies : [];
+        if (freqs.length === 0) return;
+
+        const labels = freqs.map(f => f.band);
+        const data = freqs.map(f => f.count);
+        const colors = this.getChartThemeColors();
+
+        this.analyticsChartInstances['frequencies'] = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: data,
+              backgroundColor: [
+                '#38bdf8', // 6 GHz
+                '#0067c0', // 5 GHz
+                '#818cf8', // 2.4 GHz
+                '#10b981'  // Ethernet
+              ],
+              borderColor: colors.isDark ? '#262626' : '#ffffff',
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: colors.isDark ? '#cbd5e1' : '#334155',
+                  font: { family: colors.fontFamily, size: 11 },
+                  boxWidth: 12,
+                  padding: 12
+                }
+              }
+            },
+            cutout: '65%'
+          }
+        });
+      } catch (e) {
+        console.error("Error rendering frequencies chart:", e);
+      }
     },
 
     renderNodeLoadChart() {
-      const canvas = document.getElementById('analyticsNodeLoadChart');
-      if (!canvas) return;
-      if (this.analyticsChartInstances['nodeLoad']) {
-        this.analyticsChartInstances['nodeLoad'].destroy();
-      }
-      const nodes = this.analyticsDistribution.node_load || [];
-      const labels = nodes.map(n => n.name);
-      const data = nodes.map(n => n.client_count);
-      const colors = this.getChartThemeColors();
+      try {
+        const canvas = document.getElementById('analyticsNodeLoadChart');
+        if (!canvas) return;
+        if (typeof Chart !== 'undefined' && Chart.getChart(canvas)) {
+          Chart.getChart(canvas).destroy();
+        }
+        if (this.analyticsChartInstances && this.analyticsChartInstances['nodeLoad']) {
+          try { this.analyticsChartInstances['nodeLoad'].destroy(); } catch (e) {}
+          delete this.analyticsChartInstances['nodeLoad'];
+        }
 
-      this.analyticsChartInstances['nodeLoad'] = new Chart(canvas.getContext('2d'), {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Client Connessi',
-            data: data,
-            backgroundColor: 'rgba(0, 103, 192, 0.8)',
-            borderColor: '#0067c0',
-            borderWidth: 1,
-            borderRadius: 6
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false }
+        const nodes = (this.analyticsDistribution && this.analyticsDistribution.node_load) ? this.analyticsDistribution.node_load : [];
+        if (nodes.length === 0) return;
+
+        const labels = nodes.map(n => n.name);
+        const data = nodes.map(n => n.client_count);
+        const colors = this.getChartThemeColors();
+
+        this.analyticsChartInstances['nodeLoad'] = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Client Connessi',
+              data: data,
+              backgroundColor: 'rgba(0, 103, 192, 0.8)',
+              borderColor: '#0067c0',
+              borderWidth: 1,
+              borderRadius: 6
+            }]
           },
-          scales: {
-            x: {
-              beginAtZero: true,
-              ticks: { color: colors.ticksColor, precision: 0 },
-              grid: { color: colors.gridColor }
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+              legend: { display: false }
             },
-            y: {
-              ticks: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } },
-              grid: { display: false }
+            scales: {
+              x: {
+                beginAtZero: true,
+                ticks: { color: colors.ticksColor, precision: 0 },
+                grid: { color: colors.gridColor }
+              },
+              y: {
+                ticks: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } },
+                grid: { display: false }
+              }
             }
           }
-        }
-      });
+        });
+      } catch (e) {
+        console.error("Error rendering node load chart:", e);
+      }
     },
 
     renderCategoriesChart() {
-      const canvas = document.getElementById('analyticsCategoriesChart');
-      if (!canvas) return;
-      if (this.analyticsChartInstances['categories']) {
-        this.analyticsChartInstances['categories'].destroy();
-      }
-      const cats = this.analyticsDistribution.categories || [];
-      const labels = cats.map(c => c.category);
-      const data = cats.map(c => c.count);
-      const colors = this.getChartThemeColors();
-
-      this.analyticsChartInstances['categories'] = new Chart(canvas.getContext('2d'), {
-        type: 'doughnut',
-        data: {
-          labels: labels,
-          datasets: [{
-            data: data,
-            backgroundColor: [
-              '#0067c0', '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#64748b'
-            ],
-            borderColor: colors.isDark ? '#262626' : '#ffffff',
-            borderWidth: 2
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } }
-            }
-          },
-          cutout: '65%'
+      try {
+        const canvas = document.getElementById('analyticsCategoriesChart');
+        if (!canvas) return;
+        if (typeof Chart !== 'undefined' && Chart.getChart(canvas)) {
+          Chart.getChart(canvas).destroy();
         }
-      });
+        if (this.analyticsChartInstances && this.analyticsChartInstances['categories']) {
+          try { this.analyticsChartInstances['categories'].destroy(); } catch (e) {}
+          delete this.analyticsChartInstances['categories'];
+        }
+
+        const cats = (this.analyticsDistribution && this.analyticsDistribution.categories) ? this.analyticsDistribution.categories : [];
+        if (cats.length === 0) return;
+
+        const labels = cats.map(c => c.category);
+        const data = cats.map(c => c.count);
+        const colors = this.getChartThemeColors();
+
+        this.analyticsChartInstances['categories'] = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: data,
+              backgroundColor: [
+                '#0067c0', '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#64748b'
+              ],
+              borderColor: colors.isDark ? '#262626' : '#ffffff',
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: colors.isDark ? '#cbd5e1' : '#334155',
+                  font: { family: colors.fontFamily, size: 11 },
+                  boxWidth: 12,
+                  padding: 12
+                }
+              }
+            },
+            cutout: '65%'
+          }
+        });
+      } catch (e) {
+        console.error("Error rendering categories chart:", e);
+      }
     },
 
     renderVendorsChart() {
-      const canvas = document.getElementById('analyticsVendorsChart');
-      if (!canvas) return;
-      if (this.analyticsChartInstances['vendors']) {
-        this.analyticsChartInstances['vendors'].destroy();
-      }
-      const vends = (this.analyticsDistribution.vendors || []).slice(0, 6);
-      const labels = vends.map(v => v.vendor);
-      const data = vends.map(v => v.count);
-      const colors = this.getChartThemeColors();
+      try {
+        const canvas = document.getElementById('analyticsVendorsChart');
+        if (!canvas) return;
+        if (typeof Chart !== 'undefined' && Chart.getChart(canvas)) {
+          Chart.getChart(canvas).destroy();
+        }
+        if (this.analyticsChartInstances && this.analyticsChartInstances['vendors']) {
+          try { this.analyticsChartInstances['vendors'].destroy(); } catch (e) {}
+          delete this.analyticsChartInstances['vendors'];
+        }
 
-      this.analyticsChartInstances['vendors'] = new Chart(canvas.getContext('2d'), {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Dispositivi',
-            data: data,
-            backgroundColor: 'rgba(99, 102, 241, 0.8)',
-            borderColor: '#6366f1',
-            borderWidth: 1,
-            borderRadius: 6
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false }
+        const vends = ((this.analyticsDistribution && this.analyticsDistribution.vendors) ? this.analyticsDistribution.vendors : []).slice(0, 6);
+        if (vends.length === 0) return;
+
+        const labels = vends.map(v => v.vendor);
+        const data = vends.map(v => v.count);
+        const colors = this.getChartThemeColors();
+
+        this.analyticsChartInstances['vendors'] = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Dispositivi',
+              data: data,
+              backgroundColor: 'rgba(99, 102, 241, 0.8)',
+              borderColor: '#6366f1',
+              borderWidth: 1,
+              borderRadius: 6
+            }]
           },
-          scales: {
-            x: {
-              ticks: { color: colors.ticksColor, font: { family: colors.fontFamily, size: 10 } },
-              grid: { display: false }
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+              legend: { display: false }
             },
-            y: {
-              beginAtZero: true,
-              ticks: { color: colors.ticksColor, precision: 0 },
-              grid: { color: colors.gridColor }
+            scales: {
+              x: {
+                ticks: { color: colors.ticksColor, font: { family: colors.fontFamily, size: 10 } },
+                grid: { display: false }
+              },
+              y: {
+                beginAtZero: true,
+                ticks: { color: colors.ticksColor, precision: 0 },
+                grid: { color: colors.gridColor }
+              }
             }
           }
-        }
-      });
+        });
+      } catch (e) {
+        console.error("Error rendering vendors chart:", e);
+      }
     },
 
     renderSlaChart() {
-      const canvas = document.getElementById('analyticsSlaChart');
-      if (!canvas) return;
-      if (this.analyticsChartInstances['sla']) {
-        this.analyticsChartInstances['sla'].destroy();
-      }
-      const points = this.analyticsSla.history_points || [];
-      const labels = points.map(p => {
-        const d = new Date(p.timestamp);
-        return isNaN(d.getTime()) ? p.timestamp : d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-      });
-      const dlData = points.map(p => p.download_mbps);
-      const ulData = points.map(p => p.upload_mbps);
-      const pingData = points.map(p => p.ping_ms);
-      const colors = this.getChartThemeColors();
+      try {
+        const canvas = document.getElementById('analyticsSlaChart');
+        if (!canvas) return;
+        if (typeof Chart !== 'undefined' && Chart.getChart(canvas)) {
+          Chart.getChart(canvas).destroy();
+        }
+        if (this.analyticsChartInstances && this.analyticsChartInstances['sla']) {
+          try { this.analyticsChartInstances['sla'].destroy(); } catch (e) {}
+          delete this.analyticsChartInstances['sla'];
+        }
 
-      this.analyticsChartInstances['sla'] = new Chart(canvas.getContext('2d'), {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: 'Download (Mbps)',
-              data: dlData,
-              borderColor: '#0067c0',
-              backgroundColor: 'rgba(0, 103, 192, 0.1)',
-              borderWidth: 2,
-              pointRadius: 2,
-              tension: 0.3,
-              fill: true,
-              yAxisID: 'y'
-            },
-            {
-              label: 'Upload (Mbps)',
-              data: ulData,
-              borderColor: '#10b981',
-              backgroundColor: 'rgba(16, 185, 129, 0.05)',
-              borderWidth: 2,
-              pointRadius: 2,
-              tension: 0.3,
-              fill: true,
-              yAxisID: 'y'
-            },
-            {
-              label: 'Ping (ms)',
-              data: pingData,
-              borderColor: '#f59e0b',
-              borderWidth: 1.5,
-              pointRadius: 2,
-              borderDash: [4, 4],
-              tension: 0.3,
-              fill: false,
-              yAxisID: 'y1'
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          plugins: {
-            legend: {
-              position: 'top',
-              labels: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } }
-            }
+        const points = (this.analyticsSla && this.analyticsSla.history_points) ? this.analyticsSla.history_points : [];
+        if (points.length === 0) return;
+
+        const labels = points.map(p => {
+          const d = new Date(p.timestamp);
+          return isNaN(d.getTime()) ? p.timestamp : d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        });
+        const dlData = points.map(p => p.download_mbps);
+        const ulData = points.map(p => p.upload_mbps);
+        const pingData = points.map(p => p.ping_ms);
+        const colors = this.getChartThemeColors();
+
+        this.analyticsChartInstances['sla'] = new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Download (Mbps)',
+                data: dlData,
+                borderColor: '#0067c0',
+                backgroundColor: 'rgba(0, 103, 192, 0.1)',
+                borderWidth: 2,
+                pointRadius: 2,
+                tension: 0.3,
+                fill: true,
+                yAxisID: 'y'
+              },
+              {
+                label: 'Upload (Mbps)',
+                data: ulData,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                borderWidth: 2,
+                pointRadius: 2,
+                tension: 0.3,
+                fill: true,
+                yAxisID: 'y'
+              },
+              {
+                label: 'Ping (ms)',
+                data: pingData,
+                borderColor: '#f59e0b',
+                borderWidth: 1.5,
+                pointRadius: 2,
+                borderDash: [4, 4],
+                tension: 0.3,
+                fill: false,
+                yAxisID: 'y1'
+              }
+            ]
           },
-          scales: {
-            x: {
-              ticks: { color: colors.ticksColor, maxTicksLimit: 8, font: { size: 10 } },
-              grid: { color: colors.gridColor }
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } }
+              }
             },
-            y: {
-              type: 'linear',
-              display: true,
-              position: 'left',
-              beginAtZero: true,
-              ticks: { color: colors.ticksColor, font: { size: 10 } },
-              grid: { color: colors.gridColor },
-              title: { display: true, text: 'Throughput (Mbps)', color: colors.ticksColor, font: { size: 10 } }
-            },
-            y1: {
-              type: 'linear',
-              display: true,
-              position: 'right',
-              beginAtZero: true,
-              ticks: { color: '#f59e0b', font: { size: 10 } },
-              grid: { drawOnChartArea: false },
-              title: { display: true, text: 'Latenza (ms)', color: '#f59e0b', font: { size: 10 } }
+            scales: {
+              x: {
+                ticks: { color: colors.ticksColor, maxTicksLimit: 8, font: { size: 10 } },
+                grid: { color: colors.gridColor }
+              },
+              y: {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                beginAtZero: true,
+                ticks: { color: colors.ticksColor, font: { size: 10 } },
+                grid: { color: colors.gridColor },
+                title: { display: true, text: 'Throughput (Mbps)', color: colors.ticksColor, font: { size: 10 } }
+              },
+              y1: {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                beginAtZero: true,
+                ticks: { color: '#f59e0b', font: { size: 10 } },
+                grid: { drawOnChartArea: false },
+                title: { display: true, text: 'Latenza (ms)', color: '#f59e0b', font: { size: 10 } }
+              }
             }
           }
-        }
-      });
+        });
+      } catch (e) {
+        console.error("Error rendering SLA chart:", e);
+      }
     },
 
     async exportData(dataType, format) {
