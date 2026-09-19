@@ -209,17 +209,17 @@ document.addEventListener('alpine:init', () => {
     // Changelog Modal State
     showChangelogModal: false,
     changelogContent: '',
-    changelogVersion: '1.4.02',
+    changelogVersion: '1.5.0',
     changelogLoading: false,
 
     // About Modal State
     showAboutModal: false,
 
-    // Auto-Update State (v1.4.02)
+    // Auto-Update State (v1.5.0)
     updateInfo: {
       update_available: false,
-      current_version: '1.4.02',
-      latest_version: '1.4.02',
+      current_version: '1.5.0',
+      latest_version: '1.5.0',
       release_title: '',
       release_notes: '',
       docker_socket_available: false,
@@ -2733,7 +2733,7 @@ document.addEventListener('alpine:init', () => {
         const res = await fetch(`/api/manual/changelog?lang=${this.currentLanguage || 'en'}`);
         const json = await res.json();
         if (json.status === 'success' && json.content) {
-          this.changelogVersion = json.version || '1.4.02';
+          this.changelogVersion = json.version || '1.5.0';
           this.changelogContent = this.renderSimpleMarkdown(json.content);
         }
       } catch (err) {
