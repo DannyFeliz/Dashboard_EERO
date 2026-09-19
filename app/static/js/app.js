@@ -1087,7 +1087,7 @@ document.addEventListener('alpine:init', () => {
         this.deviceSortDirection = this.deviceSortDirection === 'asc' ? 'desc' : 'asc';
       } else {
         this.deviceSortField = field;
-        this.deviceSortDirection = (field === 'signal' || field === 'status') ? 'desc' : 'asc';
+        this.deviceSortDirection = (field === 'signal' || field === 'status' || field === 'download' || field === 'upload') ? 'desc' : 'asc';
       }
     },
 
@@ -1245,6 +1245,28 @@ document.addEventListener('alpine:init', () => {
               return 2; // offline
             };
             res = getStatusScore(a) - getStatusScore(b);
+            break;
+          }
+          case 'download': {
+            const dlA = Number(a.rx_bytes || 0);
+            const dlB = Number(b.rx_bytes || 0);
+            res = dlA - dlB;
+            if (res === 0) {
+              const nameA = (a.custom_name || a.nickname || a.hostname || '').toLowerCase();
+              const nameB = (b.custom_name || b.nickname || b.hostname || '').toLowerCase();
+              res = nameA.localeCompare(nameB);
+            }
+            break;
+          }
+          case 'upload': {
+            const ulA = Number(a.tx_bytes || 0);
+            const ulB = Number(b.tx_bytes || 0);
+            res = ulA - ulB;
+            if (res === 0) {
+              const nameA = (a.custom_name || a.nickname || a.hostname || '').toLowerCase();
+              const nameB = (b.custom_name || b.nickname || b.hostname || '').toLowerCase();
+              res = nameA.localeCompare(nameB);
+            }
             break;
           }
           default:
