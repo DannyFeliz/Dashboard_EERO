@@ -44,6 +44,7 @@ class BackgroundPoller:
         self._last_adguard_sync: Optional[datetime] = None
         self._prev_device_metrics: Dict[str, Dict[str, Any]] = {}
         self._prev_poll_time: Optional[datetime] = None
+        self._prev_connected_wireless_macs: Set[str] = set()
 
     async def start(self):
         if self._running:
@@ -804,7 +805,7 @@ class BackgroundPoller:
 
             self._prev_poll_time = now_dt
 
-            # 3.5 Campionamento continuo Segnale RSSI dispositivi wireless (v1.04.00)
+            # 3.5 Campionamento continuo Segnale RSSI dispositivi wireless & Rilevamento Uscita/Departure
             if not getattr(eero_client, "is_demo_mode", False):
                 wireless_samples = [
                     d for d in enriched_devices
@@ -812,6 +813,19 @@ class BackgroundPoller:
                 ]
                 if wireless_samples:
                     asyncio.create_task(db_service.record_device_signal_samples(wireless_samples, is_demo=0))
+
+                # Rilevamento disconnessione / uscita da casa per dispositivi wireless: bonifica campioni transitori
+                current_connected_wireless_macs = {
+                    str(d.get("mac") or d.get("mac_address") or "").lower().strip()
+                    for d in enriched_devices
+                    if d.get("connected") and d.get("wireless") and (d.get("mac") or d.get("mac_address"))
+                }
+                if self._prev_connected_wireless_macs:
+                    disconnected_macs = self._prev_connected_wireless_macs - current_connected_wireless_macs
+                    for d_mac in disconnected_macs:
+                        if d_mac:
+                            asyncio.create_task(db_service.prune_device_exit_transient_samples(d_mac, window_minutes=5, threshold_rssi=-75, is_demo=0))
+                self._prev_connected_wireless_macs = current_connected_wireless_macs
 
             # 3.6 Campionamento continuo Utilizzo Dati Dispositivi (v1.5.0 Insights Suite)
             try:

@@ -6,6 +6,24 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
 
 ## [1.5.0] - 2026-09-19
 
+### 🌐 Correzione Riconciliazione Primary Gateway in Topologie Multi-Ethernet (Issue #36)
+* **🌐 Elezione Deterministica del Primary Gateway su Switch e Reti Cablate:**
+  * Risolta la segnalazione [Issue #36](https://github.com/EnricoFlammini/Dashboard_EERO/issues/36) (`jpatchMC`) relativa all'errata identificazione del nodo Gateway primario in topologie dove più nodi eero secondari (leaf) sono collegati via Ethernet tramite switch.
+  * **Gerarchia di Riconciliazione Rigorosa in `get_eeros()`:** L'elezione del Primary Gateway ora rispetta una precedenza assoluta:
+    1. ID/URL univoco fornito direttamente dai metadati di rete eero Cloud (`current_gateway_id`, `current_gateway_url`).
+    2. Nome del gateway registrato nella rete (`current_gateway_name`, es. *"Family Room"*).
+    3. IP del gateway di subnet LAN (`current_gateway_ip`, tipicamente `192.168.4.1`).
+    4. Nodo con flag `is_gateway` confermato da telemetria.
+    5. Fallback su porte WAN fisiche solo in assenza di metadati IP e ID.
+  * **Demozione e Classificazione Accurata Nodi Foglia:** I nodi secondari cablati via Ethernet (come l'eero *"Office"* con porta gigabit) non vengono più erroneamente marcati come Gateway WAN, ma etichettati accuratamente come `Ethernet (1.0 Gbps)` o `Ethernet (Cablato)`.
+
+### 📶 Smart Signal Watchlist & Bonifica Transitori di Uscita (Fade-out Pruning)
+* **📶 Prevenzione Falsi Positivi per Dispositivi Mobili che Escono di Casa:**
+  * Risolto il problema per cui smartphone o tablet portati fuori dall'abitazione registravano un ultimo campione di segnale molto debole (es. -89 dBm sul cancello o per strada) che restava visibile per 6 ore nella *Weak Signal Watchlist*, suggerendo erroneamente di riposizionare i beacon eero.
+  * **Bonifica Transitori di Uscita (`prune_device_exit_transient_samples`):** Il demone di polling rileva istantaneamente quando un dispositivo wireless si disconnette (`connected: True -> False`) e ripulisce in background gli ultimi campioni critici (< -75 dBm) generati durante l'allontanamento fisico negli ultimi 5 minuti prima della disconnessione.
+  * **Filtro di Presenza Attiva in Tempo Reale:** L'endpoint `/api/metrics/signal/overview` filtra le statistiche e la Watchlist solo per i dispositivi wireless attualmente connessi alla rete mesh. I dispositivi disconnessi non inquinano più i KPI di salute e i consigli di riposizionamento beacon.
+  * **Interfaccia Pulita (Strict No-Emoji):** Sostituzione delle emoji nell'intestazione della Watchlist con iconografia SVG vettoriale ad alta definizione integrata nel design system dark/light.
+
 ### 🌐 Multi-Network Fleet Management & Hot-Swap Dinamico (Issue #22)
 * **🌐 Supporto Multi-Rete per Account eero Multipli & Fleet Management:**
   * Risolta la segnalazione [Issue #22](https://github.com/EnricoFlammini/Dashboard_EERO/issues/22) e recepita la richiesta della community (`mayhemkrew`) per supportare account eero con più reti configurate sotto lo stesso account utente (es. casa vacanze, ufficio, parenti).

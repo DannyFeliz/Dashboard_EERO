@@ -583,7 +583,45 @@ class DBService:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
 
-    async def get_signal_overview(self, is_demo: int = 0) -> Dict[str, Any]:
+    async def prune_device_exit_transient_samples(
+        self, 
+        mac_address: str, 
+        window_minutes: int = 5, 
+        threshold_rssi: int = -75, 
+        is_demo: int = 0
+    ) -> int:
+        """
+        Rimuove i campioni transitori registrati negli ultimi N minuti prima della disconnessione
+        di un dispositivo wireless (es. allontanamento da casa con smartphone), preservando il
+        reale livello di segnale fruito all'interno dell'abitazione ed evitando falsi allarmi.
+        """
+        mac = str(mac_address).lower().strip()
+        if not mac:
+            return 0
+        cutoff_z = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        cutoff_space = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+        async with self.get_connection() as db:
+            cursor = await db.execute(
+                """
+                DELETE FROM device_signal_history
+                WHERE mac_address = ? 
+                  AND (timestamp >= ? OR timestamp >= ?)
+                  AND signal_rssi < ?
+                  AND is_demo = ?
+                """,
+                (mac, cutoff_z, cutoff_space, threshold_rssi, is_demo)
+            )
+            deleted = cursor.rowcount
+            await db.commit()
+            if deleted > 0:
+                logger.info(f"Bonificati {deleted} campioni transitori di uscita per dispositivo {mac} (< {threshold_rssi} dBm).")
+            return deleted
+
+    async def get_signal_overview(
+        self, 
+        is_demo: int = 0, 
+        active_macs: Optional[Set[str]] = None
+    ) -> Dict[str, Any]:
         """Calcola le statistiche aggregate di copertura mesh e qualità del segnale RSSI di tutti i dispositivi."""
         async with self.get_connection() as db:
             # Prendi l'ultimo campione per ciascun MAC nelle ultime 6 ore
@@ -605,9 +643,17 @@ class DBService:
                 (cutoff_z, cutoff_space, is_demo, is_demo)
             )
             rows = await cursor.fetchall()
-            devices = [dict(r) for r in rows]
+            all_sampled_devices = [dict(r) for r in rows]
 
-        total = len(devices)
+        # Se active_macs è fornito, filtriamo i dispositivi per le statistiche attive (KPI & Watchlist)
+        # preservando all_sampled_devices per il selettore del grafico storico
+        if active_macs is not None:
+            active_macs_lower = {str(m).lower().strip() for m in active_macs}
+            active_devices = [d for d in all_sampled_devices if d["mac_address"].lower() in active_macs_lower]
+        else:
+            active_devices = all_sampled_devices
+
+        total = len(active_devices)
         if total == 0:
             return {
                 "total_wireless_devices": 0,
@@ -621,16 +667,16 @@ class DBService:
                 "fair_pct": 0,
                 "weak_pct": 0,
                 "weak_devices": [],
-                "devices": []
+                "devices": all_sampled_devices
             }
 
-        total_rssi = sum(d["signal_rssi"] for d in devices)
+        total_rssi = sum(d["signal_rssi"] for d in active_devices)
         avg_rssi = round(total_rssi / total, 1)
 
-        excellent = [d for d in devices if d["signal_rssi"] >= -50]
-        good = [d for d in devices if -65 <= d["signal_rssi"] < -50]
-        fair = [d for d in devices if -75 <= d["signal_rssi"] < -65]
-        weak = [d for d in devices if d["signal_rssi"] < -75]
+        excellent = [d for d in active_devices if d["signal_rssi"] >= -50]
+        good = [d for d in active_devices if -65 <= d["signal_rssi"] < -50]
+        fair = [d for d in active_devices if -75 <= d["signal_rssi"] < -65]
+        weak = [d for d in active_devices if d["signal_rssi"] < -75]
 
         return {
             "total_wireless_devices": total,
@@ -644,7 +690,7 @@ class DBService:
             "fair_pct": round((len(fair) / total) * 100, 1),
             "weak_pct": round((len(weak) / total) * 100, 1),
             "weak_devices": weak,
-            "devices": devices
+            "devices": all_sampled_devices
         }
 
     # ----------------- DEVICE USAGE HISTORY & INSIGHTS (v1.5.0) -----------------

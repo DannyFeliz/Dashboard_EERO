@@ -209,7 +209,15 @@ async def get_signal_overview():
                 }
             }
 
-        overview = await db_service.get_signal_overview(is_demo=0)
+        # Rileva i MAC dei dispositivi wireless attualmente connessi dalla cache del poller
+        cached_devs = background_poller.cached_devices or []
+        active_wireless_macs = {
+            str(d.get("mac") or d.get("mac_address") or "").lower().strip()
+            for d in cached_devs
+            if d.get("connected") and d.get("wireless")
+        }
+        active_set = active_wireless_macs if active_wireless_macs else None
+        overview = await db_service.get_signal_overview(is_demo=0, active_macs=active_set)
         return {
             "status": "success",
             "overview": overview

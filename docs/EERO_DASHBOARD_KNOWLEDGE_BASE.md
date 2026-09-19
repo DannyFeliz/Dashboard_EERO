@@ -174,7 +174,11 @@ Finestra modale con spiegazione dettagliata in bilingue, elenco delle penalità 
 * Tabella SQLite `device_signal_history`.
 * Rilevamento continuo del livello RSSI (dBm), banda e frequenza.
 * Indicatore visivo del segnale medio dell'intera abitazione.
-* "Weak Signal Watchlist": monitoraggio dei dispositivi con segnale critico ($< -75\text{ dBm}$) con consigli per il riposizionamento dei nodi mesh.
+* Rilevamento continuo del livello RSSI (dBm), banda e frequenza.
+* Indicatore visivo del segnale medio dell'intera abitazione.
+* **Smart Signal Watchlist & Prevenzione Falsi Positivi:** Monitoraggio dei dispositivi con segnale critico ($< -75\text{ dBm}$) con consigli per il riposizionamento dei nodi mesh. Include due innovazioni fondamentali:
+  * **Bonifica Transitori di Uscita (*Exit Transient Pruning*):** Quando un dispositivo mobile lascia l'abitazione, il segnale degrada drasticamente prima dello sgancio definitivo. Il poller rileva la disconnessione (`connected: True -> False`) e purga in automatico gli ultimi campioni critici registrati nei 5 minuti precedenti, impedendo che lo smartphone rimanga bloccato nella watchlist per 6 ore dopo essere uscito di casa.
+  * **Filtro di Presenza Attiva in Tempo Reale:** La watchlist e i KPI di salute mesh considerano esclusivamente i client wireless attualmente connessi alla rete.
 
 ### 4.9 Auto-Update Docker In-App a 1-Clic (`/api/system/update`)
 * Verifica oraria di nuove versioni disponibili confrontando i tag su Docker Hub e GitHub Releases.
@@ -201,9 +205,11 @@ Finestra modale con spiegazione dettagliata in bilingue, elenco delle penalità 
 * Supporto per bot Telegram e webhook JSON generici compatibili con Home Assistant.
 
 ### 4.14 Speed Test & Analisi Prestazioni Gateway
-* Esecuzione di speed test tramite il modem gateway eero (misurazione della velocità reale WAN verso l'ISP).
-* Storico delle misurazioni archiviato su SQLite con grafici di Download, Upload e Latenza Ping.
-* Protezione e purga automatica dei dati di test mock (`912.45 Mbps / 298.10 Mbps`) per prevenire alterazioni dello storico reale (Issue #35).
+* **Esecuzione NATIVA sull'Hardware del Router Gateway eero:** A differenza di altri applicativi che eseguono benchmark locali sul container Docker (colli di bottiglia su bridge virtuali, CPU dell'host o Wi-Fi), il test viene scatenato direttamente sul processore del Gateway eero verso i server di test Amazon/eero tramite chiamata REST `POST /2.2/networks/{network_id}/speedtest`.
+* **Campionamento Reale della Porta WAN verso l'ISP:** La misurazione riflette la reale capacità fisica di linea della fibra/rame dell'ISP senza alcuna influenza da parte dell'hardware o della rete in cui gira il container Docker.
+* **Sincronizzazione Automatica Test Notturni eero:** Il router eero esegue nativamente test periodici notturni per ottimizzare il QoS/SQM di rete; la dashboard intercetta tali misurazioni da eero Cloud e le storicizza su SQLite.
+* **Storico Dati su SQLite:** Grafici storici Chart.js di Download, Upload e Latenza Ping.
+* **Protezione e Purga Dati Mock:** Rimozione garantita dei record fittizi (`912.45 Mbps / 298.10 Mbps`) per prevenire alterazioni dello storico reale (Issue #35).
 
 ### 4.15 Modalità Demo (Simulatore Integrato Dual-Network)
 * Simulazione realistica completa a zero configurazione, senza bisogno di credenziali eero.
@@ -376,9 +382,20 @@ Questa sezione documenta le cause radice dei bug riscontrati durante lo sviluppo
 * **Causa Radice:** Durante l'inizializzazione dello schema, `purge_all_mock_data()` apriva una seconda connessione concorrente a SQLite mentre la transazione di `init_db()` era ancora aperta. Inoltre, i metodi di fallback su errore API autenticata ritornavano dati mock invece di generare eccezioni o riutilizzare l'ultimo stato noto.
 * **Risoluzione:** `purge_all_mock_data(conn=db)` riutilizza ora la connessione attiva all'interno della stessa transazione atomica. Rimozione di qualsiasi fallback a dati fittizi in ambiente live autenticato.
 
+### Issue #36 — Incorrect Primary Gateway in Multi-Ethernet Switched Topologies
+* **Sintomo:** In reti con più nodi eero secondari connessi a switch gigabit (es. nodo "Office" con link a 1 Gbps), la dashboard etichettava erroneamente "Office" come Primary Gateway al posto del vero router principale "Family Room" (`192.168.4.1`).
+* **Causa Radice:** Nelle porte auto-sensing eero con switch upstream, i metadati locali delle porte possono includere stringhe `Port 1 (WAN)` o `has_wan_port`. La precedente logica di fallback considerava la presenza di porte WAN fisiche con precedenza superiore rispetto all'IP autoritativo di subnet (`gateway_ip = 192.168.4.1`) e al nome autoritativo registrato (`gateway_name = "Family Room"`).
+* **Risoluzione:** Riorganizzata la gerarchia di elezione in `get_eeros()` per dare precedenza assoluta ai metadati di rete eero Cloud (`current_gateway_id`, `current_gateway_name`, `current_gateway_ip = 192.168.4.1`). I nodi secondari cablati via switch vengono correttamente demotati ed etichettati come `Ethernet (1.0 Gbps)` o `Ethernet (Cablato)`.
+
 ---
 
 ## 9. Guida al Troubleshooting & FAQ per l'Utente
+
+### D: Lo Speed Test viene eseguito dal container Docker o dal router eero?
+R: **Viene eseguito al 100% dal router Gateway eero hardware.** Il container Docker non installa né esegue software o librerie locali di benchmarking (come `speedtest-cli` o `iperf`), che sarebbero limitate dalla scheda di rete del server host o dal virtual bridge Docker. Quando l'utente preme *"Esegui Speed Test"*, la dashboard invia una richiesta REST protetta da token all'infrastruttura cloud di Amazon (`POST /2.2/networks/{id}/speedtest`), ordinando al microprocessore dell'apparato eero di effettuare il test direttamente sulla sua porta WAN connessa all'ONT/modem verso i server speedtest eero. La dashboard si limita a interrogare i risultati certificati calcolati dal router.
+
+### D: Perché un telefono uscito di casa non compare più nella "Weak Signal Watchlist"?
+R: Nelle versioni precedenti, quando un utente usciva di casa con lo smartphone, l'ultimo segnale registrato prima dello sgancio (es. -89 dBm sul cancello) restava memorizzato per 6 ore come segnale critico. Dalla versione 1.5.0, il sistema implementa la **Bonifica dei Transitori di Uscita** (*Exit Transient Pruning*): non appena il poller rileva la disconnessione (`connected: True -> False`), elimina automaticamente gli ultimi campioni deboli registrati negli ultimi 5 minuti prima dell'uscita, e filtra l'elenco escludendo i client non attivi.
 
 ### D: Come posso far ripartire il container se perdo la connessione o il token scade?
 R: È sufficiente accedere all'interfaccia web: se il token è scaduto, la dashboard mostra automaticamente la schermata di login 2FA. In alternativa, è possibile eliminare il file `data/session.json` e riavviare il container per iniziare un'autenticazione pulita.

@@ -32,7 +32,7 @@ from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.config import settings
-from app.services.eero_client import eero_client
+from app.services.eero_client import eero_client, parse_speed_mbps, format_speed_mbps
 from app.services.adguard import adguard_service, normalize_adguard_url
 from app.services.notifications import notification_service
 from app.services.db import db_service
@@ -622,10 +622,20 @@ async def run_all_tests():
                 (gw_cached_url and str(n.get("url") or "") == str(gw_cached_url))
             )), None)
         if not primary_gw:
-            primary_gw = next((n for n in raw_cluster if n.get("has_wan_port") or any("wan" in str(p).lower() for p in n.get("ethernet_ports_details", []))), None)
+            gw_cached_name = getattr(eero_client, "current_gateway_name", None)
+            if gw_cached_name:
+                primary_gw = next((n for n in raw_cluster if str(n.get("name") or "").lower() == str(gw_cached_name).lower()), None)
         if not primary_gw:
             gw_cached_ip = getattr(eero_client, "current_gateway_ip", None) or "192.168.4.1"
             primary_gw = next((n for n in raw_cluster if n.get("ip") and n.get("ip") == gw_cached_ip), None)
+        if not primary_gw:
+            gw_nodes = [n for n in raw_cluster if n.get("is_gateway")]
+            if len(gw_nodes) == 1:
+                primary_gw = gw_nodes[0]
+            elif len(gw_nodes) > 1:
+                primary_gw = next((n for n in gw_nodes if n.get("ip") == (getattr(eero_client, "current_gateway_ip", None) or "192.168.4.1")), gw_nodes[0])
+        if not primary_gw:
+            primary_gw = next((n for n in raw_cluster if n.get("has_wan_port") or any("wan" in str(p).lower() for p in n.get("ethernet_ports_details", []))), None)
         if not primary_gw:
             primary_gw = raw_cluster[0]
 
@@ -637,10 +647,10 @@ async def run_all_tests():
             else:
                 n["is_gateway"] = False
                 is_6e_or_7 = any(m in str(n.get("model") or "").lower() for m in ("pro 6e", "max 7", "outdoor 7", "k010001", "s010001", "t010001"))
+                candidate_speeds = [parse_speed_mbps(s) for s in n.get("ethernet_ports_details", [])]
+                spd_mbps = max(candidate_speeds) if candidate_speeds else 0
+                spd_fmt = format_speed_mbps(spd_mbps)
                 if n.get("raw_wired") is True:
-                    candidate_speeds = [parse_speed_mbps(s) for s in n.get("ethernet_ports_details", [])]
-                    spd_mbps = max(candidate_speeds) if candidate_speeds else 0
-                    spd_fmt = format_speed_mbps(spd_mbps)
                     n["wired"] = True
                     n["backhaul_type"] = f"Ethernet ({spd_fmt})" if spd_fmt else "Ethernet (Cablato)"
                 elif is_6e_or_7 or "6" in str(n.get("wireless_band") or ""):
@@ -654,6 +664,55 @@ async def run_all_tests():
         runner.assert_true(norm_max7["backhaul_type"] == "Gateway (WAN)", "Max 7 ha backhaul 'Gateway (WAN)'")
         runner.assert_true(norm_outdoor["is_gateway"] is False, "Outdoor 7 PoE non è eletto Primary Gateway")
         runner.assert_true(norm_outdoor["backhaul_type"] == "Wireless Mesh (6 GHz)", f"Outdoor 7 PoE ha backhaul 'Wireless Mesh (6 GHz)' (ottenuto: {norm_outdoor['backhaul_type']})")
+
+        # Test 5: Risoluzione accurata Primary Gateway su topologia multi-ethernet Issue #36 (jpatchMC)
+        jpatch_nodes_raw = [
+            {"id": "jp_garage", "name": "Garage", "model": "eero 6 Extender", "ip": "192.168.7.133", "wired": False},
+            {"id": "jp_office", "name": "Office", "model": "eero 6+", "ip": "192.168.6.192", "wired": True, "ethernet_ports_details": ["Port 1 (WAN): 1.0 Gbps"], "raw_wired": True},
+            {"id": "jp_living", "name": "Living Room", "model": "eero 6+", "ip": "192.168.7.177", "wired": True, "ethernet_ports_details": ["Port 1: 1.0 Gbps"], "raw_wired": True},
+            {"id": "jp_family", "name": "Family Room", "model": "eero 6+", "ip": "192.168.4.1", "wired": True, "ethernet_ports_details": ["Port 1 (WAN): 1.0 Gbps"], "raw_wired": True}
+        ]
+        norm_jpatch = [eero_client._normalize_eero_node(n) for n in jpatch_nodes_raw]
+        eero_client.current_gateway_ip = "192.168.4.1"
+        eero_client.current_gateway_id = None
+        eero_client.current_gateway_url = None
+        eero_client.current_gateway_name = "Family Room"
+
+        reconciled_jpatch = list(norm_jpatch)
+        gw_cached_id = getattr(eero_client, "current_gateway_id", None)
+        gw_cached_url = getattr(eero_client, "current_gateway_url", None)
+        primary_gw = None
+        if gw_cached_id or gw_cached_url:
+            primary_gw = next((n for n in reconciled_jpatch if (
+                (gw_cached_id and str(n.get("id") or "") == str(gw_cached_id)) or
+                (gw_cached_id and gw_cached_id in str(n.get("url") or "")) or
+                (gw_cached_url and str(n.get("url") or "") == str(gw_cached_url))
+            )), None)
+        if not primary_gw:
+            gw_cached_name = getattr(eero_client, "current_gateway_name", None)
+            if gw_cached_name:
+                primary_gw = next((n for n in reconciled_jpatch if str(n.get("name") or "").lower() == str(gw_cached_name).lower()), None)
+        if not primary_gw:
+            gw_cached_ip = getattr(eero_client, "current_gateway_ip", None) or "192.168.4.1"
+            primary_gw = next((n for n in reconciled_jpatch if n.get("ip") and n.get("ip") == gw_cached_ip), None)
+        if not primary_gw:
+            primary_gw = reconciled_jpatch[0]
+
+        for n in reconciled_jpatch:
+            if n is primary_gw:
+                n["is_gateway"] = True
+                n["wired"] = True
+                n["backhaul_type"] = "Gateway (WAN)"
+            else:
+                n["is_gateway"] = False
+                n["backhaul_type"] = "Ethernet (1.0 Gbps)" if n.get("raw_wired") else "Wireless Mesh (5 GHz)"
+
+        jp_office_res = next(n for n in reconciled_jpatch if n["name"] == "Office")
+        jp_family_res = next(n for n in reconciled_jpatch if n["name"] == "Family Room")
+        runner.assert_true(jp_family_res["is_gateway"] is True, "Family Room (192.168.4.1) correttamente eletto Primary Gateway (Issue #36)")
+        runner.assert_true(jp_family_res["backhaul_type"] == "Gateway (WAN)", "Family Room backhaul è 'Gateway (WAN)'")
+        runner.assert_true(jp_office_res["is_gateway"] is False, "Office (192.168.6.192) demotato correttamente a nodo foglia")
+        runner.assert_true(jp_office_res["backhaul_type"] == "Ethernet (1.0 Gbps)", f"Office backhaul è 'Ethernet (1.0 Gbps)' (ottenuto: {jp_office_res['backhaul_type']})")
 
         # Test 5: Estrazione DNS Servers personalizzati e fallback gateway IP (Issue #30)
         custom_dns_net = {
@@ -831,6 +890,12 @@ async def run_all_tests():
         inserted = await db_service.record_device_signal_samples(signal_samples)
         runner.assert_true(inserted == 2, f"Salvati 2 campioni di segnale su SQLite (inseriti: {inserted})")
 
+        # Configura cache poller con i dispositivi attivi per il test dell'overview
+        background_poller.cached_devices = [
+            {"mac": "AA:BB:CC:DD:EE:01", "hostname": "iPhone Test Soggiorno", "connected": True, "wireless": True},
+            {"mac": "AA:BB:CC:DD:EE:02", "hostname": "Telecamera Giardino", "connected": True, "wireless": True}
+        ]
+
         # 4. Test Endpoint /api/metrics/signal/overview
         overview_res = await client.get("/api/metrics/signal/overview")
         runner.assert_true(overview_res.status_code == 200, "Endpoint GET /api/metrics/signal/overview risponde HTTP 200")
@@ -847,6 +912,22 @@ async def run_all_tests():
         hist_data = history_res.json()
         runner.assert_true(hist_data.get("points_count", 0) >= 1, "Cronologia segnale per iPhone Test riporta campioni storici")
         runner.assert_true(hist_data["history"][0]["signal_rssi"] == -45, "Valore RSSI -45 dBm verificato nei punti storici")
+
+        # 6. Test Bonifica Transitori di Uscita (Exit Fade-out Pruning)
+        exit_mac = "AA:BB:CC:DD:EE:99"
+        await db_service.record_device_signal_samples([
+            {"mac_address": exit_mac, "hostname": "Telefono Uscente", "signal_rssi": -55},
+            {"mac_address": exit_mac, "hostname": "Telefono Uscente", "signal_rssi": -89}
+        ])
+        pruned_count = await db_service.prune_device_exit_transient_samples(exit_mac, window_minutes=5, threshold_rssi=-75)
+        runner.assert_true(pruned_count >= 1, f"Bonificato campione transitorio di uscita per {exit_mac} (pruned: {pruned_count})")
+        remaining_hist = await db_service.get_device_signal_history(exit_mac, range_hours=1)
+        runner.assert_true(all(pt["signal_rssi"] >= -75 for pt in remaining_hist), "Nessun campione critico < -75 dBm residuo dopo exit pruning")
+
+        # 7. Test Filtro Presenza Attiva su Signal Overview (dispositivo disconnesso escluso da Watchlist)
+        overview_active_only = await db_service.get_signal_overview(is_demo=0, active_macs={"aa:bb:cc:dd:ee:01"})
+        runner.assert_true(overview_active_only.get("total_wireless_devices") == 1, "Overview con active_macs filtra solo dispositivi connessi")
+        runner.assert_true(len(overview_active_only.get("weak_devices", [])) == 0, "Dispositivo offline con ultimo segnale debole escluso dalla Watchlist attiva")
 
         # =====================================================================
         # 13. TEST MULTI-ENGINE DNS SYNCHRONIZER (AdGuard, Pi-hole, Technitium) (v1.4.0)
@@ -977,7 +1058,6 @@ async def run_all_tests():
         runner.assert_true(isinstance(h_details.get("recommendations"), list), "'recommendations' è una lista")
 
         # Test unitario calcolo diagnostico su scenario degradato
-        from app.services.poller import background_poller
         deg_net = {"status": "online", "public_ip": "1.2.3.4", "speedtest": {"ping_ms": 85.0}}
         deg_eeros = [
             {"id": "gw", "name": "Gateway", "is_gateway": True, "status": "online", "connected_clients_count": 10},

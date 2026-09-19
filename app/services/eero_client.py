@@ -1739,7 +1739,7 @@ class EeroClient:
                 except Exception as ex:
                     logger.error(f"Error normalizing eero node: {ex}")
 
-            # Reconciliazione Primary Gateway: garantisce l'elezione di un unico nodo Gateway univoco (Issue #19 & Issue #26)
+            # Reconciliazione Primary Gateway: garantisce l'elezione di un unico nodo Gateway univoco (Issue #19, Issue #26 & Issue #36)
             if nodes:
                 primary_gw = None
 
@@ -1753,11 +1753,13 @@ class EeroClient:
                         (gw_cached_url and str(n.get("url") or "") == str(gw_cached_url))
                     )), None)
 
-                # 2. Nodo con porta WAN reale attiva / collegata all'ONT/modem
+                # 2. Corrispondenza Nome autoritativo di rete (gateway_name da /2.2/networks/{id})
                 if not primary_gw:
-                    primary_gw = next((n for n in nodes if n.get("has_wan_port") or any("wan" in str(p).lower() for p in n.get("ethernet_ports_details", []))), None)
+                    gw_cached_name = getattr(self, "current_gateway_name", None)
+                    if gw_cached_name:
+                        primary_gw = next((n for n in nodes if str(n.get("name") or "").lower() == str(gw_cached_name).lower()), None)
 
-                # 3. Corrispondenza IP con gateway_ip di rete (default 192.168.4.1 o subnet gateway)
+                # 3. Corrispondenza IP con gateway_ip di rete (default 192.168.4.1 o subnet router IP - Issue #36)
                 if not primary_gw:
                     gw_cached_ip = getattr(self, "current_gateway_ip", None) or "192.168.4.1"
                     primary_gw = next((n for n in nodes if n.get("ip") and n.get("ip") == gw_cached_ip), None)
@@ -1765,10 +1767,17 @@ class EeroClient:
                 # 4. Nodo con flag is_gateway già impostato da _is_gateway_node
                 if not primary_gw:
                     gw_nodes = [n for n in nodes if n.get("is_gateway")]
-                    if gw_nodes:
+                    if len(gw_nodes) == 1:
                         primary_gw = gw_nodes[0]
+                    elif len(gw_nodes) > 1:
+                        # Se più nodi hanno il flag, priorità a quello con IP gateway
+                        primary_gw = next((n for n in gw_nodes if n.get("ip") == (getattr(self, "current_gateway_ip", None) or "192.168.4.1")), gw_nodes[0])
 
-                # 5. Fallback finale al primo nodo
+                # 5. Nodo con porta WAN reale attiva / collegata all'ONT/modem (fallback in assenza di IP/metadati)
+                if not primary_gw:
+                    primary_gw = next((n for n in nodes if n.get("has_wan_port") or any("wan" in str(p).lower() for p in n.get("ethernet_ports_details", []))), None)
+
+                # 6. Fallback finale al primo nodo
                 if not primary_gw:
                     primary_gw = nodes[0]
 
@@ -1782,10 +1791,10 @@ class EeroClient:
                         n["is_gateway"] = False
                         if n.get("backhaul_type") == "Gateway (WAN)":
                             is_6e_or_7 = any(m in str(n.get("model") or "").lower() for m in ("pro 6e", "max 7", "outdoor 7", "k010001", "s010001", "t010001"))
-                            if n.get("raw_wired") is True:
-                                candidate_speeds = [parse_speed_mbps(s) for s in n.get("ethernet_ports_details", [])]
-                                spd_mbps = max(candidate_speeds) if candidate_speeds else 0
-                                spd_fmt = format_speed_mbps(spd_mbps)
+                            candidate_speeds = [parse_speed_mbps(s) for s in n.get("ethernet_ports_details", [])]
+                            spd_mbps = max(candidate_speeds) if candidate_speeds else 0
+                            spd_fmt = format_speed_mbps(spd_mbps)
+                            if n.get("raw_wired") is True or (spd_mbps > 0 and n.get("raw_wired") is not False):
                                 n["wired"] = True
                                 n["backhaul_type"] = f"Ethernet ({spd_fmt})" if spd_fmt else "Ethernet (Cablato)"
                             elif is_6e_or_7 or "6" in str(n.get("wireless_band") or ""):
