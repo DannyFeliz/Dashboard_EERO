@@ -3147,8 +3147,8 @@ document.addEventListener('alpine:init', () => {
           : d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
       });
 
-      const downRates = usageData.data_points.map(p => p.download_rate_mbps || 0);
-      const upRates = usageData.data_points.map(p => p.upload_rate_mbps || 0);
+      const downRates = usageData.data_points.map(p => Number(p.download_mbps !== undefined ? p.download_mbps : (p.download_rate_mbps || 0)));
+      const upRates = usageData.data_points.map(p => Number(p.upload_mbps !== undefined ? p.upload_mbps : (p.upload_rate_mbps || 0)));
 
       this.deviceUsageChart = new Chart(canvas.getContext('2d'), {
         type: 'line',
@@ -3204,6 +3204,8 @@ document.addEventListener('alpine:init', () => {
               ticks: { color: textColor, font: { size: 10 } }
             },
             y: {
+              min: 0,
+              beginAtZero: true,
               grid: { color: gridColor },
               ticks: { color: textColor, font: { size: 10 } },
               title: { display: true, text: 'Mbps', color: textColor, font: { size: 10 } }

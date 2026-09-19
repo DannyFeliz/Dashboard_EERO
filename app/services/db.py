@@ -739,6 +739,48 @@ class DBService:
                 sim_time += step_delta
             points = base_points
 
+        # Calcolo dinamico delta e bitrate effettivo per ciascun campione storico
+        for i in range(len(points)):
+            p = points[i]
+            p_down = float(p.get("download_mbps") or 0.0)
+            p_up = float(p.get("upload_mbps") or 0.0)
+
+            if i > 0:
+                prev_p = points[i - 1]
+                try:
+                    t_str_prev = str(prev_p.get("timestamp", "")).replace("Z", "").split(".")[0]
+                    t_str_curr = str(p.get("timestamp", "")).replace("Z", "").split(".")[0]
+                    t_prev = datetime.fromisoformat(t_str_prev)
+                    t_curr = datetime.fromisoformat(t_str_curr)
+                    dt_sec = max(1.0, (t_curr - t_prev).total_seconds())
+
+                    rx_curr = float(p.get("rx_bytes") or 0.0)
+                    rx_prev = float(prev_p.get("rx_bytes") or 0.0)
+                    if rx_curr >= rx_prev and dt_sec > 0:
+                        calc_down = round(((rx_curr - rx_prev) * 8.0) / (dt_sec * 1_000_000.0), 2)
+                        p_down = max(p_down, calc_down)
+
+                    tx_curr = float(p.get("tx_bytes") or 0.0)
+                    tx_prev = float(prev_p.get("tx_bytes") or 0.0)
+                    if tx_curr >= tx_prev and dt_sec > 0:
+                        calc_up = round(((tx_curr - tx_prev) * 8.0) / (dt_sec * 1_000_000.0), 2)
+                        p_up = max(p_up, calc_up)
+                except Exception:
+                    pass
+
+            p["download_mbps"] = p_down
+            p["upload_mbps"] = p_up
+            p["download_rate_mbps"] = p_down
+            p["upload_rate_mbps"] = p_up
+
+        if len(points) > 1:
+            if points[0]["download_mbps"] == 0:
+                points[0]["download_mbps"] = points[1]["download_mbps"]
+                points[0]["download_rate_mbps"] = points[1]["download_rate_mbps"]
+            if points[0]["upload_mbps"] == 0:
+                points[0]["upload_mbps"] = points[1]["upload_mbps"]
+                points[0]["upload_rate_mbps"] = points[1]["upload_rate_mbps"]
+
         # Calcolo aggregati delta totali per il periodo
         first_p = points[0]
         last_p = points[-1]

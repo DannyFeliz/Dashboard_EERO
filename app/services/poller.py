@@ -769,6 +769,41 @@ class BackgroundPoller:
                 ]
                 node["connected_clients_count"] = len(matched_clients)
 
+            # 3.5.1 Calcolo Throughput Real-Time effettivo basato sui delta dei contatori hardware (rx_bytes / tx_bytes)
+            now_dt = datetime.now(timezone.utc)
+            dt_sec = (now_dt - self._prev_poll_time).total_seconds() if self._prev_poll_time else 0.0
+
+            for dev_copy in enriched_devices:
+                mac_key = (dev_copy.get("mac") or "").lower().strip()
+                if not mac_key:
+                    continue
+                rx_now = float(dev_copy.get("rx_bytes") or 0.0)
+                tx_now = float(dev_copy.get("tx_bytes") or 0.0)
+
+                calc_down = float(dev_copy.get("download_rate_mbps") or 0.0)
+                calc_up = float(dev_copy.get("upload_rate_mbps") or 0.0)
+
+                if mac_key in self._prev_device_metrics and dt_sec > 0.5:
+                    prev_data = self._prev_device_metrics[mac_key]
+                    rx_prev = float(prev_data.get("rx_bytes") or 0.0)
+                    tx_prev = float(prev_data.get("tx_bytes") or 0.0)
+
+                    if rx_now >= rx_prev:
+                        delta_rx = rx_now - rx_prev
+                        rate_down = round((delta_rx * 8.0) / (dt_sec * 1_000_000.0), 2)
+                        calc_down = max(calc_down, rate_down)
+
+                    if tx_now >= tx_prev:
+                        delta_tx = tx_now - tx_prev
+                        rate_up = round((delta_tx * 8.0) / (dt_sec * 1_000_000.0), 2)
+                        calc_up = max(calc_up, rate_up)
+
+                dev_copy["download_rate_mbps"] = round(calc_down, 2)
+                dev_copy["upload_rate_mbps"] = round(calc_up, 2)
+                self._prev_device_metrics[mac_key] = {"rx_bytes": rx_now, "tx_bytes": tx_now, "timestamp": now_dt}
+
+            self._prev_poll_time = now_dt
+
             # 3.5 Campionamento continuo Segnale RSSI dispositivi wireless (v1.04.00)
             if not getattr(eero_client, "is_demo_mode", False):
                 wireless_samples = [

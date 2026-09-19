@@ -1127,11 +1127,13 @@
                   <!-- Traffic (Download & Upload) -->
                   <td class="py-2.5 px-2 font-mono whitespace-nowrap">
                     <div class="flex flex-col leading-tight">
-                      <span class="text-xs font-bold text-sky-600 dark:text-sky-400" :title="dev.download_rate_mbps > 0.05 ? 'DL: ' + formatBytes(dev.rx_bytes || 0) + ' (' + dev.download_rate_mbps + ' Mbps)' : 'DL: ' + formatBytes(dev.rx_bytes || 0)">
+                      <span class="text-xs font-bold text-sky-600 dark:text-sky-400" :title="'DL Totale: ' + formatBytes(dev.rx_bytes || 0) + (dev.download_rate_mbps > 0.05 ? ' • Real-Time: ' + dev.download_rate_mbps + ' Mbps' : '')">
                         ↓ <span x-text="formatBytes(dev.rx_bytes || 0)"></span>
+                        <span x-show="dev.download_rate_mbps > 0.05" class="text-[10px] text-sky-500 dark:text-sky-400 font-medium ml-1" x-text="'(' + dev.download_rate_mbps + 'M)'"></span>
                       </span>
-                      <span class="text-[10px] font-medium text-emerald-600 dark:text-emerald-400" :title="dev.upload_rate_mbps > 0.05 ? 'UL: ' + formatBytes(dev.tx_bytes || 0) + ' (' + dev.upload_rate_mbps + ' Mbps)' : 'UL: ' + formatBytes(dev.tx_bytes || 0)">
+                      <span class="text-[10px] font-medium text-emerald-600 dark:text-emerald-400" :title="'UL Totale: ' + formatBytes(dev.tx_bytes || 0) + (dev.upload_rate_mbps > 0.05 ? ' • Real-Time: ' + dev.upload_rate_mbps + ' Mbps' : '')">
                         ↑ <span x-text="formatBytes(dev.tx_bytes || 0)"></span>
+                        <span x-show="dev.upload_rate_mbps > 0.05" class="text-[9px] text-emerald-500 dark:text-emerald-400 font-normal ml-1" x-text="'(' + dev.upload_rate_mbps + 'M)'"></span>
                       </span>
                     </div>
                   </td>
