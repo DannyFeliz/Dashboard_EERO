@@ -34,6 +34,7 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
     * **30 Giorni** (aggregazione mensile)
   * **Grafico Interattivo Chart.js:** Visualizzazione grafica con curve di download/upload, indicatori di picco e badge di riepilogo metriche (Download Totale, Upload Totale, Traffico Combinato).
   * **Widget Top Bandwidth Hogs nella Dashboard:** Card nella vista principale per visualizzare istantaneamente la classifica dei dispositivi che consumano più traffico nella rete, con accesso con 1 clic al dettaglio del dispositivo.
+  * **Raffinamento UI & Fix Selettore Temporale Widget:** Visualizzazione dedicata e pulita per Download (↓) e Upload (↑) con rimozione del volume totale ridondante, fix del binding dei pulsanti periodo (*Last 24h*, *7 Days*, *30 Days*) e gestione intelligente del delta storico di consumo in `db.py`.
 
 ---
 

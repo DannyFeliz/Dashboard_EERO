@@ -340,14 +340,15 @@ async def get_top_bandwidth_hogs(limit: int = 5, period: str = "daily"):
         # Fallback dai dispositivi attualmente in cache se lo storico è ancora scarso
         if not hogs:
             cached_devs = background_poller.cached_devices or []
+            demo_factor = 1.0 if (period == "daily" or not is_demo_flag) else (4.2 if period == "weekly" else 14.8)
             sorted_devs = sorted(
                 cached_devs,
                 key=lambda d: float(d.get("rx_bytes") or 0) + float(d.get("tx_bytes") or 0),
                 reverse=True
             )[:limit]
             for d in sorted_devs:
-                rx_b = float(d.get("rx_bytes") or 0)
-                tx_b = float(d.get("tx_bytes") or 0)
+                rx_b = round(float(d.get("rx_bytes") or 0) * demo_factor, 1)
+                tx_b = round(float(d.get("tx_bytes") or 0) * demo_factor, 1)
                 hogs.append({
                     "mac": d.get("mac"),
                     "hostname": d.get("nickname") or d.get("hostname") or d.get("mac"),

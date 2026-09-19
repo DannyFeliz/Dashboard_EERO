@@ -763,16 +763,48 @@ class DBService:
             cursor = await db.execute(query, tuple(params))
             rows = await cursor.fetchall()
 
+            # Controllo profondità temporale dello storico nel database
+            span_cursor = await db.execute(
+                "SELECT MIN(timestamp) as min_ts, MAX(timestamp) as max_ts FROM device_usage_history WHERE is_demo = ?",
+                (is_demo,)
+            )
+            span_row = await span_cursor.fetchone()
+            has_deep_history = False
+            if span_row and span_row["min_ts"] and span_row["max_ts"]:
+                try:
+                    t_min = datetime.fromisoformat(str(span_row["min_ts"]).replace("Z", "+00:00"))
+                    t_max = datetime.fromisoformat(str(span_row["max_ts"]).replace("Z", "+00:00"))
+                    if (t_max - t_min).total_seconds() >= 43200: # almeno 12 ore di storico registrato
+                        has_deep_history = True
+                except Exception:
+                    has_deep_history = False
+
         results = []
         for r in rows:
             m_rx = float(r["max_rx"] or 0)
             m_tx = float(r["max_tx"] or 0)
+            min_rx = float(r["min_rx"] or 0)
+            min_tx = float(r["min_tx"] or 0)
+
+            if is_demo == 1:
+                factor = 1.0 if period == "daily" else (4.2 if period == "weekly" else 14.8)
+                final_rx = round(m_rx * factor, 1)
+                final_tx = round(m_tx * factor, 1)
+            elif has_deep_history and min_rx > 0 and m_rx >= min_rx:
+                d_rx = m_rx - min_rx
+                d_tx = m_tx - min_tx
+                final_rx = d_rx if d_rx > 0 else m_rx
+                final_tx = d_tx if d_tx > 0 else m_tx
+            else:
+                final_rx = m_rx
+                final_tx = m_tx
+
             results.append({
                 "mac": r["mac_address"],
                 "hostname": r["hostname"],
-                "rx_bytes": m_rx,
-                "tx_bytes": m_tx,
-                "total_bytes": m_rx + m_tx,
+                "rx_bytes": final_rx,
+                "tx_bytes": final_tx,
+                "total_bytes": final_rx + final_tx,
                 "avg_down_mbps": round(float(r["avg_down"] or 0), 2),
                 "avg_up_mbps": round(float(r["avg_up"] or 0), 2),
             })

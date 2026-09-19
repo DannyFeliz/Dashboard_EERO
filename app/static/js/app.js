@@ -3052,11 +3052,14 @@ document.addEventListener('alpine:init', () => {
     // =========================================================================
     // DEVICE DATA USAGE INSIGHTS SUITE & TOP HOGS (v1.5.0)
     // =========================================================================
-    async fetchTopHogs(period = 'daily') {
-      this.topHogsPeriod = period;
+    async fetchTopHogs(period = null) {
+      if (period) {
+        this.topHogsPeriod = period;
+      }
+      const activePeriod = this.topHogsPeriod || 'daily';
       this.topHogsLoading = true;
       try {
-        const res = await fetch(`/api/network/top-hogs?period=${period}&limit=5`);
+        const res = await fetch(`/api/network/top-hogs?period=${activePeriod}&limit=5`);
         const data = await res.json();
         if (data.status === 'success') {
           this.topHogsList = data.top_hogs || [];

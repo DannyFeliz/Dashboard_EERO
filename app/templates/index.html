@@ -749,21 +749,21 @@
           <div class="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs self-start sm:self-auto">
             <button 
               type="button"
-              @click="topHogsPeriod = 'daily'; fetchTopHogs()" 
+              @click="fetchTopHogs('daily')" 
               class="px-3 py-1 rounded-lg font-medium transition cursor-pointer"
               :class="topHogsPeriod === 'daily' ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
               x-text="t('top_hogs.period_daily')">
             </button>
             <button 
               type="button"
-              @click="topHogsPeriod = 'weekly'; fetchTopHogs()" 
+              @click="fetchTopHogs('weekly')" 
               class="px-3 py-1 rounded-lg font-medium transition cursor-pointer"
               :class="topHogsPeriod === 'weekly' ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
               x-text="t('top_hogs.period_weekly')">
             </button>
             <button 
               type="button"
-              @click="topHogsPeriod = 'monthly'; fetchTopHogs()" 
+              @click="fetchTopHogs('monthly')" 
               class="px-3 py-1 rounded-lg font-medium transition cursor-pointer"
               :class="topHogsPeriod === 'monthly' ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
               x-text="t('top_hogs.period_monthly')">
@@ -795,10 +795,16 @@
                       <div class="text-[10px] font-mono text-slate-500 truncate" x-text="hog.mac"></div>
                     </div>
                   </div>
-                  <div class="text-right flex-shrink-0 ml-2">
-                    <div class="text-xs font-mono font-extrabold text-sky-600 dark:text-sky-400" x-text="formatBytes(hog.total_bytes)"></div>
-                    <div class="text-[10px] text-slate-500">
-                      ↓ <span class="font-mono" x-text="formatBytes(hog.rx_bytes)"></span>
+                  <div class="text-right flex-shrink-0 ml-2 space-y-0.5">
+                    <div class="text-xs font-mono font-bold text-sky-600 dark:text-sky-400 flex items-center justify-end space-x-1" title="Download">
+                      <span class="text-slate-400 text-[10px] font-normal">DL</span>
+                      <span>↓</span>
+                      <span x-text="formatBytes(hog.rx_bytes)"></span>
+                    </div>
+                    <div class="text-[11px] font-mono font-medium text-emerald-600 dark:text-emerald-400 flex items-center justify-end space-x-1" title="Upload">
+                      <span class="text-slate-400 text-[10px] font-normal">UL</span>
+                      <span>↑</span>
+                      <span x-text="formatBytes(hog.tx_bytes)"></span>
                     </div>
                   </div>
                 </div>
