@@ -677,7 +677,7 @@ class DBService:
             await db.commit()
         return inserted
 
-    async def get_device_usage_history(self, mac_address: str, period: str = "daily", is_demo: int = 0) -> Dict[str, Any]:
+    async def get_device_usage_history(self, mac_address: str, period: str = "daily", resolution_minutes: int = 15, is_demo: int = 0) -> Dict[str, Any]:
         """Recupera la serie temporale e l'aggregazione di traffico dati (Daily, Weekly, Monthly) per un dispositivo."""
         mac = str(mac_address).lower().strip()
         now = datetime.now(timezone.utc)
@@ -685,15 +685,16 @@ class DBService:
         if period == "weekly":
             cutoff = (now - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
             cutoff_z = (now - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            date_format = "%Y-%m-%d"
+            resolution_minutes = max(resolution_minutes, 120)
         elif period == "monthly":
             cutoff = (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
             cutoff_z = (now - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            date_format = "%Y-%m-%d"
+            resolution_minutes = max(resolution_minutes, 720)
         else: # daily
             cutoff = (now - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
             cutoff_z = (now - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            date_format = "%Y-%m-%d %H:00"
+            if resolution_minutes not in (10, 15, 20, 30):
+                resolution_minutes = 15
 
         async with self.get_connection() as db:
             cursor = await db.execute(
@@ -713,11 +714,11 @@ class DBService:
         if len(points) < 2:
             base_points = []
             if period == "daily":
-                steps = 12
-                step_delta = timedelta(hours=2)
+                steps = max(6, min(48, int(24 * 60 / resolution_minutes)))
+                step_delta = timedelta(minutes=resolution_minutes)
             elif period == "weekly":
-                steps = 7
-                step_delta = timedelta(days=1)
+                steps = 14
+                step_delta = timedelta(hours=12)
             else: # monthly
                 steps = 15
                 step_delta = timedelta(days=2)
@@ -735,53 +736,13 @@ class DBService:
                     "tx_bytes": cum_tx + inc_tx,
                     "download_mbps": round(random.uniform(2.0, 35.0), 2),
                     "upload_mbps": round(random.uniform(0.5, 8.0), 2),
+                    "download_rate_mbps": round(random.uniform(2.0, 35.0), 2),
+                    "upload_rate_mbps": round(random.uniform(0.5, 8.0), 2),
                 })
                 sim_time += step_delta
             points = base_points
 
-        # Calcolo dinamico delta e bitrate effettivo per ciascun campione storico
-        for i in range(len(points)):
-            p = points[i]
-            p_down = float(p.get("download_mbps") or 0.0)
-            p_up = float(p.get("upload_mbps") or 0.0)
-
-            if i > 0:
-                prev_p = points[i - 1]
-                try:
-                    t_str_prev = str(prev_p.get("timestamp", "")).replace("Z", "").split(".")[0]
-                    t_str_curr = str(p.get("timestamp", "")).replace("Z", "").split(".")[0]
-                    t_prev = datetime.fromisoformat(t_str_prev)
-                    t_curr = datetime.fromisoformat(t_str_curr)
-                    dt_sec = max(1.0, (t_curr - t_prev).total_seconds())
-
-                    rx_curr = float(p.get("rx_bytes") or 0.0)
-                    rx_prev = float(prev_p.get("rx_bytes") or 0.0)
-                    if rx_curr >= rx_prev and dt_sec > 0:
-                        calc_down = round(((rx_curr - rx_prev) * 8.0) / (dt_sec * 1_000_000.0), 2)
-                        p_down = max(p_down, calc_down)
-
-                    tx_curr = float(p.get("tx_bytes") or 0.0)
-                    tx_prev = float(prev_p.get("tx_bytes") or 0.0)
-                    if tx_curr >= tx_prev and dt_sec > 0:
-                        calc_up = round(((tx_curr - tx_prev) * 8.0) / (dt_sec * 1_000_000.0), 2)
-                        p_up = max(p_up, calc_up)
-                except Exception:
-                    pass
-
-            p["download_mbps"] = p_down
-            p["upload_mbps"] = p_up
-            p["download_rate_mbps"] = p_down
-            p["upload_rate_mbps"] = p_up
-
-        if len(points) > 1:
-            if points[0]["download_mbps"] == 0:
-                points[0]["download_mbps"] = points[1]["download_mbps"]
-                points[0]["download_rate_mbps"] = points[1]["download_rate_mbps"]
-            if points[0]["upload_mbps"] == 0:
-                points[0]["upload_mbps"] = points[1]["upload_mbps"]
-                points[0]["upload_rate_mbps"] = points[1]["upload_rate_mbps"]
-
-        # Calcolo aggregati delta totali per il periodo
+        # Calcolo aggregati delta totali per l'intero periodo
         first_p = points[0]
         last_p = points[-1]
         delta_rx = max(0.0, float(last_p["rx_bytes"]) - float(first_p["rx_bytes"]))
@@ -792,10 +753,101 @@ class DBService:
         tx_val = delta_tx if delta_tx > 0 else float(last_p["tx_bytes"])
         tot_val = total_usage_bytes if total_usage_bytes > 0 else (rx_val + tx_val)
 
+        # Parsing temporale dei campioni
+        parsed_points = []
+        for p in points:
+            try:
+                t_str = str(p.get("timestamp", "")).replace("Z", "").split(".")[0]
+                dt_val = datetime.fromisoformat(t_str).replace(tzinfo=timezone.utc)
+                parsed_points.append({
+                    "dt": dt_val,
+                    "epoch": dt_val.timestamp(),
+                    "rx_bytes": float(p.get("rx_bytes") or 0.0),
+                    "tx_bytes": float(p.get("tx_bytes") or 0.0),
+                    "download_mbps": float(p.get("download_mbps") or 0.0),
+                    "upload_mbps": float(p.get("upload_mbps") or 0.0),
+                })
+            except Exception:
+                continue
+
+        parsed_points.sort(key=lambda x: x["epoch"])
+
+        # Aggregazione dinamica a intervalli (es. 10, 15, 20, 30 min) per rappresentare
+        # la reale velocità media sostenuta nel tempo (eliminando buchi temporali del video buffer)
+        bucket_sec = resolution_minutes * 60
+        aggregated_points = []
+
+        if len(parsed_points) >= 2:
+            start_b = int(parsed_points[0]["epoch"] // bucket_sec) * bucket_sec
+            end_b = int(parsed_points[-1]["epoch"] // bucket_sec) * bucket_sec
+
+            bucket_samples = {}
+            for s in parsed_points:
+                b_idx = int(s["epoch"] // bucket_sec) * bucket_sec
+                bucket_samples.setdefault(b_idx, []).append(s)
+
+            prev_rx = parsed_points[0]["rx_bytes"]
+            prev_tx = parsed_points[0]["tx_bytes"]
+            prev_epoch = parsed_points[0]["epoch"]
+
+            curr_b = start_b
+            while curr_b <= end_b:
+                samples_in_b = bucket_samples.get(curr_b, [])
+                b_iso = datetime.fromtimestamp(curr_b, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+                if samples_in_b:
+                    s_last = samples_in_b[-1]
+                    cur_rx = s_last["rx_bytes"]
+                    cur_tx = s_last["tx_bytes"]
+                    cur_epoch = s_last["epoch"]
+
+                    d_rx = max(0.0, cur_rx - prev_rx) if cur_rx >= prev_rx else 0.0
+                    d_tx = max(0.0, cur_tx - prev_tx) if cur_tx >= prev_tx else 0.0
+                    dt = max(30.0, cur_epoch - prev_epoch)
+
+                    calc_down = round((d_rx * 8.0) / (dt * 1_000_000.0), 2)
+                    calc_up = round((d_tx * 8.0) / (dt * 1_000_000.0), 2)
+
+                    avg_sample_down = sum(s["download_mbps"] for s in samples_in_b) / len(samples_in_b)
+                    avg_sample_up = sum(s["upload_mbps"] for s in samples_in_b) / len(samples_in_b)
+
+                    final_down = max(calc_down, round(avg_sample_down, 2))
+                    final_up = max(calc_up, round(avg_sample_up, 2))
+
+                    prev_rx = cur_rx
+                    prev_tx = cur_tx
+                    prev_epoch = cur_epoch
+                else:
+                    final_down = 0.0
+                    final_up = 0.0
+                    cur_rx = prev_rx
+                    cur_tx = prev_tx
+
+                aggregated_points.append({
+                    "timestamp": b_iso,
+                    "rx_bytes": cur_rx,
+                    "tx_bytes": cur_tx,
+                    "download_mbps": final_down,
+                    "upload_mbps": final_up,
+                    "download_rate_mbps": final_down,
+                    "upload_rate_mbps": final_up,
+                })
+                curr_b += bucket_sec
+
+            if len(aggregated_points) > 1 and aggregated_points[0]["download_mbps"] == 0:
+                aggregated_points[0]["download_mbps"] = aggregated_points[1]["download_mbps"]
+                aggregated_points[0]["download_rate_mbps"] = aggregated_points[1]["download_rate_mbps"]
+                aggregated_points[0]["upload_mbps"] = aggregated_points[1]["upload_mbps"]
+                aggregated_points[0]["upload_rate_mbps"] = aggregated_points[1]["upload_rate_mbps"]
+
+        if len(aggregated_points) < 2:
+            aggregated_points = points
+
         return {
             "mac_address": mac,
             "period": period,
-            "data_points": points,
+            "resolution_minutes": resolution_minutes,
+            "data_points": aggregated_points,
             "summary": {
                 "rx_bytes": rx_val,
                 "tx_bytes": tx_val,

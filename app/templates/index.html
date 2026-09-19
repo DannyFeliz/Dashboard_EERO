@@ -2280,34 +2280,74 @@
 
         <!-- ==================== TAB 4: CONSUMO DATI (v1.5.0) ==================== -->
         <div x-show="deviceDetailTab === 'usage'" class="space-y-4" style="display: none;">
-          <!-- Period Selector Pills -->
-          <div class="flex items-center justify-between bg-slate-100 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center space-x-1.5">
-              <svg class="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-              <span x-text="t('device_modal.usage_period_title')"></span>
+          <!-- Period & Resolution Selector Pills -->
+          <div class="space-y-2 bg-slate-100 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center space-x-1.5">
+                <svg class="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                <span x-text="t('device_modal.usage_period_title')"></span>
+              </div>
+              <div class="flex space-x-1 bg-white dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-[11px]">
+                <button 
+                  type="button"
+                  @click="loadDeviceUsage(null, 'daily')"
+                  class="px-2.5 py-1 rounded-md font-medium transition cursor-pointer"
+                  :class="deviceUsagePeriod === 'daily' ? 'bg-sky-500 text-white shadow-sm font-bold' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'"
+                  x-text="t('device_modal.period_daily')">
+                </button>
+                <button 
+                  type="button"
+                  @click="loadDeviceUsage(null, 'weekly')"
+                  class="px-2.5 py-1 rounded-md font-medium transition cursor-pointer"
+                  :class="deviceUsagePeriod === 'weekly' ? 'bg-sky-500 text-white shadow-sm font-bold' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'"
+                  x-text="t('device_modal.period_weekly')">
+                </button>
+                <button 
+                  type="button"
+                  @click="loadDeviceUsage(null, 'monthly')"
+                  class="px-2.5 py-1 rounded-md font-medium transition cursor-pointer"
+                  :class="deviceUsagePeriod === 'monthly' ? 'bg-sky-500 text-white shadow-sm font-bold' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'"
+                  x-text="t('device_modal.period_monthly')">
+                </button>
+              </div>
             </div>
-            <div class="flex space-x-1 bg-white dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-[11px]">
-              <button 
-                type="button"
-                @click="loadDeviceUsage(null, 'daily')"
-                class="px-2.5 py-1 rounded-md font-medium transition cursor-pointer"
-                :class="deviceUsagePeriod === 'daily' ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'"
-                x-text="t('device_modal.period_daily')">
-              </button>
-              <button 
-                type="button"
-                @click="loadDeviceUsage(null, 'weekly')"
-                class="px-2.5 py-1 rounded-md font-medium transition cursor-pointer"
-                :class="deviceUsagePeriod === 'weekly' ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'"
-                x-text="t('device_modal.period_weekly')">
-              </button>
-              <button 
-                type="button"
-                @click="loadDeviceUsage(null, 'monthly')"
-                class="px-2.5 py-1 rounded-md font-medium transition cursor-pointer"
-                :class="deviceUsagePeriod === 'monthly' ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'"
-                x-text="t('device_modal.period_monthly')">
-              </button>
+
+            <!-- Resolution Selector (Media 10m / 15m / 20m / 30m) -->
+            <div x-show="deviceUsagePeriod === 'daily'" class="flex items-center justify-between pt-1.5 border-t border-slate-200 dark:border-slate-700/60 text-xs">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium flex items-center space-x-1">
+                <svg class="w-3.5 h-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span x-text="t('device_modal.resolution_label')"></span>
+              </span>
+              <div class="flex space-x-1 bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] font-semibold">
+                <button 
+                  type="button"
+                  @click="loadDeviceUsage(null, 'daily', 10)"
+                  class="px-2 py-0.5 rounded transition cursor-pointer"
+                  :class="deviceUsageResolution === 10 ? 'bg-sky-500 text-white shadow-xs font-bold' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'">
+                  10 min
+                </button>
+                <button 
+                  type="button"
+                  @click="loadDeviceUsage(null, 'daily', 15)"
+                  class="px-2 py-0.5 rounded transition cursor-pointer"
+                  :class="deviceUsageResolution === 15 ? 'bg-sky-500 text-white shadow-xs font-bold' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'">
+                  15 min
+                </button>
+                <button 
+                  type="button"
+                  @click="loadDeviceUsage(null, 'daily', 20)"
+                  class="px-2 py-0.5 rounded transition cursor-pointer"
+                  :class="deviceUsageResolution === 20 ? 'bg-sky-500 text-white shadow-xs font-bold' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'">
+                  20 min
+                </button>
+                <button 
+                  type="button"
+                  @click="loadDeviceUsage(null, 'daily', 30)"
+                  class="px-2 py-0.5 rounded transition cursor-pointer"
+                  :class="deviceUsageResolution === 30 ? 'bg-sky-500 text-white shadow-xs font-bold' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'">
+                  30 min
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2340,7 +2380,7 @@
                 <canvas id="deviceUsageChartCanvas"></canvas>
               </div>
               <div class="mt-2 flex items-center justify-between text-[10px] text-slate-500">
-                <span x-text="t('device_modal.usage_chart_hint')"></span>
+                <span x-text="t('device_modal.usage_chart_hint') + (deviceUsagePeriod === 'daily' ? ' (' + (deviceUsageData && deviceUsageData.resolution_minutes ? deviceUsageData.resolution_minutes : (deviceUsageResolution || 15)) + ' min)' : '')"></span>
                 <span class="font-mono" x-text="deviceUsageData ? deviceUsageData.period : ''"></span>
               </div>
             </div>

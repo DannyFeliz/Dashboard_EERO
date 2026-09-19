@@ -61,6 +61,7 @@ document.addEventListener('alpine:init', () => {
 
     // Device Data Usage Insights State (v1.5.0)
     deviceUsagePeriod: 'daily', // 'daily' | 'weekly' | 'monthly'
+    deviceUsageResolution: 15, // 10 | 15 | 20 | 30 min (for daily)
     deviceUsageLoading: false,
     deviceUsageData: null,
     deviceUsageChart: null,
@@ -3093,16 +3094,20 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async loadDeviceUsage(mac, period = null) {
+    async loadDeviceUsage(mac = null, period = null, resolution = null) {
       const targetMac = mac || (this.selectedDevice ? (this.selectedDevice.mac || this.selectedDevice.mac_address) : '');
       if (!targetMac) return;
       if (period) {
         this.deviceUsagePeriod = period;
       }
+      if (resolution) {
+        this.deviceUsageResolution = resolution;
+      }
       const activePeriod = this.deviceUsagePeriod || 'daily';
+      const activeRes = this.deviceUsageResolution || 15;
       this.deviceUsageLoading = true;
       try {
-        const res = await fetch(`/api/devices/${encodeURIComponent(targetMac)}/usage?period=${activePeriod}`);
+        const res = await fetch(`/api/devices/${encodeURIComponent(targetMac)}/usage?period=${activePeriod}&resolution=${activeRes}`);
         const data = await res.json();
         if (data.status === 'success') {
           this.deviceUsageData = data.data;

@@ -467,11 +467,20 @@ async def assign_device_profile(mac_address: str, payload: DeviceProfileAssignRe
 
 
 @router.get("/{mac_address}/usage")
-async def get_device_usage(mac_address: str, period: str = "daily"):
-    """Restituisce lo storico dell'utilizzo dati per il dispositivo (Daily, Weekly, Monthly) - v1.5.0 Insights Suite."""
+async def get_device_usage(
+    mac_address: str, 
+    period: str = "daily", 
+    resolution: int = Query(15, ge=5, le=1440)
+):
+    """Restituisce lo storico dell'utilizzo dati per il dispositivo (Daily, Weekly, Monthly) aggregato per intervallo."""
     try:
         is_demo_flag = 1 if getattr(eero_client, "is_demo_mode", False) else 0
-        usage_data = await db_service.get_device_usage_history(mac_address=mac_address, period=period, is_demo=is_demo_flag)
+        usage_data = await db_service.get_device_usage_history(
+            mac_address=mac_address, 
+            period=period, 
+            resolution_minutes=resolution,
+            is_demo=is_demo_flag
+        )
         return {
             "status": "success",
             "data": usage_data
