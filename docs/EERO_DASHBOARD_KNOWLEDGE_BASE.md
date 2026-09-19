@@ -230,6 +230,7 @@ Finestra modale con spiegazione dettagliata in bilingue, elenco delle penalità 
   * *Carico Nodi Mesh:* Grafico a barre orizzontali del numero di client associati a ciascun beacon eero.
   * *Categorie Dispositivi:* Suddivisione visiva dei client per tipologia d'uso.
   * *Top Produttori Hardware (OUI):* Fingerprinting dei dispositivi basato sui primi 3 ottetti del MAC address per riconoscere i vendor dominanti nella rete.
+  * **Tooltip Interattivo con Elenco Dispositivi:** Hovering su qualsiasi elemento dei 4 grafici mostra nel tooltip scuro (sfondo `rgba(15, 23, 42, 0.96)`) l'elenco nominativo completo dei dispositivi che compongono quel dato, con intestazione `Dispositivi (N):`, voci puntate `•` e troncamento automatico a 15 con contatore overflow. Il nome visualizzato per ciascun client è risolto con precedenza: alias personalizzato → nickname → hostname → IP → MAC.
 * **Trend Temporale & Monitoraggio SLA ISP:**
   * Grafico multilinea a doppio asse Y (Throughput WAN vs Ping) con periodo selezionabile (7 o 30 giorni).
   * Tabella KPI con picco download/upload, ping minimo e numero test condotti.
@@ -348,7 +349,7 @@ Tutti gli endpoint rispondono in formato JSON con intestazione `application/json
 | **GET** | `/api/metrics/signal/history` | Storico temporale potenza RSSI per un client | `?mac_address=...&hours=24` |
 | **GET** | `/api/system/update/check` | Verifica disponibilità aggiornamenti Docker/GitHub | `?force=true` |
 | **POST** | `/api/system/update/trigger` | Avvia aggiornamento automatico 1-clic del container | Nessuno |
-| **GET** | `/api/analytics/distribution` | Distribuzione frequenze Wi-Fi, carico nodi mesh, categorie e vendor OUI (v1.5.0) | Nessuno |
+| **GET** | `/api/analytics/distribution` | Distribuzione frequenze Wi-Fi, carico nodi mesh, categorie e vendor OUI con campo `devices: [...]` per ciascuna categoria (v1.5.0) | Nessuno |
 | **GET** | `/api/analytics/isp-sla` | Trend temporale e indice SLA affidabilità provider internet (v1.5.0) | `?days=7|30` |
 | **GET** | `/api/analytics/export/{data_type}` | Esportazione dataset (devices, speedtest, signal, usage) in formato CSV o JSON (v1.5.0) | `?format=csv|json&limit=500` |
 | **GET** | `/api/manual/chapters` | Elenco capitoli e argomenti del manuale integrato | `?lang=it|en` |
@@ -409,6 +410,12 @@ Questa sezione documenta le cause radice dei bug riscontrati durante lo sviluppo
 * **Sintomo:** In reti con più nodi eero secondari connessi a switch gigabit (es. nodo "Office" con link a 1 Gbps), la dashboard etichettava erroneamente "Office" come Primary Gateway al posto del vero router principale "Family Room" (`192.168.4.1`).
 * **Causa Radice:** Nelle porte auto-sensing eero con switch upstream, i metadati locali delle porte possono includere stringhe `Port 1 (WAN)` o `has_wan_port`. La precedente logica di fallback considerava la presenza di porte WAN fisiche con precedenza superiore rispetto all'IP autoritativo di subnet (`gateway_ip = 192.168.4.1`) e al nome autoritativo registrato (`gateway_name = "Family Room"`).
 * **Risoluzione:** Riorganizzata la gerarchia di elezione in `get_eeros()` per dare precedenza assoluta ai metadati di rete eero Cloud (`current_gateway_id`, `current_gateway_name`, `current_gateway_ip = 192.168.4.1`). I nodi secondari cablati via switch vengono correttamente demotati ed etichettati come `Ethernet (1.0 Gbps)` o `Ethernet (Cablato)`.
+
+### Note Tecniche — Tooltip Interattivo Grafici Analytics (v1.5.0)
+* **Contesto:** I grafici di distribuzione di rete (frequenze, carico nodi, categorie, vendor) non mostravano il dettaglio dei dispositivi singoli al passaggio del mouse.
+* **Soluzione Backend:** L'endpoint `GET /api/analytics/distribution` ora include il campo `"devices": [...]` per ogni categoria/segmento. Il nome di ogni client viene risolto tramite `_get_device_display_name(dev)` con precedenza: alias personalizzato (`custom_name`) → nickname (`nickname`) → hostname → IP → MAC address.
+* **Soluzione Frontend:** La funzione `formatDevicesTooltipAfterBody(devicesList)` formatta la lista come array di stringhe restituite da `callbacks.afterBody` di Chart.js. Il tooltip è configurato con `backgroundColor: 'rgba(15, 23, 42, 0.96)'` e marcato con il flag privato `_customDark: true`. La funzione `updateAllChartsTheme()` controlla questo flag prima di sovrascrivere il colore di sfondo, preservando il tooltip scuro in tutti i temi UI.
+* **Troncamento:** La lista viene mostrata per intero fino a 15 dispositivi; oltre tale soglia viene aggiunta la riga `... e altri X` (o `... and X more` in inglese) per mantenere il tooltip compatto.
 
 ---
 

@@ -87,6 +87,15 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
       3. *Campionamenti Segnale Wi-Fi RSSI (`/api/analytics/export/signal`):* Storico temporale della potenza del segnale per apparato.
       4. *Consumo Dati (`/api/analytics/export/usage`):* Serie storica dei volumi scambiati (RX/TX/Totale MB e pacchetti).
 
+### Tooltip Interattivo con Elenco Dispositivi nei Grafici di Distribuzione (v1.5.0)
+* **Anteprima Dispositivi al Passaggio del Mouse sui Grafici Analytics:**
+  * Hovering su qualsiasi barra, segmento o slice nei 4 grafici di distribuzione della sezione Analytics mostra ora nel tooltip scuro l'elenco nominativo completo dei dispositivi che compongono quel dato.
+  * **Backend (`/api/analytics/distribution`):** L'endpoint restituisce il campo aggiuntivo `"devices": [...]` per ciascuna categoria — frequenze Wi-Fi, carico nodi mesh, categorie dispositivi e top vendor — popolato con i nomi visualizzabili di ciascun client (alias personalizzato → nickname → hostname → IP → MAC).
+  * **Helper `_get_device_display_name()`:** Funzione backend dedicata per la risoluzione gerarchica del nome visualizzato di ciascun client, garantendo sempre un'etichetta leggibile dall'utente.
+  * **Tooltip Scuro Fisso (Chart.js):** Tutti e 4 i grafici usano un tooltip con sfondo `rgba(15, 23, 42, 0.96)` (nero antracite) marcato con il flag interno `_customDark: true`, che preserva il contrasto e impedisce la sostituzione al cambio tema chiaro/scuro.
+  * **Formattazione Strutturata con `formatDevicesTooltipAfterBody()`:** La lista viene visualizzata con intestazione `Dispositivi (N):` (o `Devices (N):` in inglese), voci con bullet `•` e troncamento automatico a 15 elementi con contatore overflow (`... e altri X`).
+  * **Integrazione con `updateAllChartsTheme()`:** La funzione di sincronizzazione temi verifica il flag `_customDark` prima di sovrascrivere il `backgroundColor` del tooltip, garantendo la persistenza del rettangolo scuro in tutte le modalità di visualizzazione.
+
 ---
 
 ## [1.4.02] - 2026-09-19
