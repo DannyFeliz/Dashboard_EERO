@@ -63,6 +63,30 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
     * **Pulsanti di Aiuto Contestuale `?` e Badge "Dati Stimati":** Aggiunti badge e pulsanti `?` dedicati accanto a tutti i contatori numerici (Download Totale, Upload Totale, Traffico Combinato e colonna Traffico nella tabella principale).
     * **Modale Informativo Trasparenza Calcolo:** Popover integrato che spiega chiaramente come viene stimata la telemetria senza abbonamento eero Plus (conteggio pacchetti Wi-Fi), il comportamento in caso di standby, la compressione del traffico nei download di giochi/file e la differenza tra contatore cumulativo assoluto a vita e delta nel periodo selezionato.
 
+### 📊 Statistiche & Analytics di Rete, Analisi SLA ISP & Data Export Center (ROADMAP v1.5.0)
+* **📊 Nuova Pagina / Vista UI "Statistiche & Analytics":**
+  * Introdotta una nuova sezione principale accessibile dalla barra laterale di navigazione con iconografia vettoriale SVG Fluent (strict no-emoji).
+  * **4 Card KPI di Sintesi Rete:**
+    * *Affidabilità Provider (SLA):* Indice percentuale (0-100%) con badge di salute *SLA OK* / *Degraded*.
+    * *Velocità Media WAN:* Throughput aggregato di Download (↓) e Upload (↑) misurato nei test storici.
+    * *Latenza & Jitter Medio:* Ping medio e varianza temporale della connessione internet (± ms jitter).
+    * *Densità Dispositivi Mesh:* Rapporto medio client/nodo e conteggio apparati attivi rispetto alla capacità dell'infrastruttura.
+  * **Griglia 2x2 Grafici di Ripartizione Rete (Chart.js):**
+    * *Distribuzione Bande Wi-Fi & Cablato:* Grafico a ciambella (doughnut) per 6 GHz, 5 GHz, 2.4 GHz ed Ethernet con percentuali calcolate in tempo reale.
+    * *Carico per Nodo Mesh:* Grafico a barre orizzontali che evidenzia la distribuzione del carico client su ciascun beacon/gateway eero.
+    * *Categorie di Dispositivi:* Suddivisione visiva dei client per tipologia (Computer, Smartphone & Tablet, IoT & Smart Home, Entertainment, Altro).
+    * *Top Produttori Hardware (OUI):* Riconoscimento fingerprinting dei vendor (Apple, Samsung, Amazon, Google, Sony, Shelly, Espressif, ecc.) basato sui prefissi MAC address.
+  * **Trend Prestazioni Linea & Monitoraggio SLA ISP:**
+    * Grafico lineare temporale multilinea interattivo con doppio asse Y (Throughput WAN in Mbps e Latenza Ping in ms).
+    * Selettore di periodo temporale a 7 giorni e 30 giorni con ricaricamento dinamico.
+    * Barra metriche SLA dedicata: *Test Eseguiti*, *Picco Download*, *Picco Upload*, *Latenza Minima*, *Jitter Medio*, *Indice SLA ISP*.
+  * **Centro Esportazione Dati (Data Export Center):**
+    * Esportazione aperta in formato standard RFC 4180 CSV e JSON strutturato per 4 dataset fondamentali:
+      1. *Dispositivi Client (`/api/analytics/export/devices`):* MAC, IP, nome host, frequenza Wi-Fi, nodo mesh, RSSI e traffico.
+      2. *Storico Speed Test (`/api/analytics/export/speedtest`):* Risultati dei test di velocità WAN eseguiti dal router.
+      3. *Campionamenti Segnale Wi-Fi RSSI (`/api/analytics/export/signal`):* Storico temporale della potenza del segnale per apparato.
+      4. *Consumo Dati (`/api/analytics/export/usage`):* Serie storica dei volumi scambiati (RX/TX/Totale MB e pacchetti).
+
 ---
 
 ## [1.4.02] - 2026-09-19

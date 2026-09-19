@@ -1297,6 +1297,74 @@ async def run_all_tests():
         runner.assert_true(not any(":" in x and len(x) > 17 for x in dropped_v6["ids"]), "Nessun indirizzo IPv6 presente quando drop_ipv6=True (Issue #31)")
         runner.assert_true("00:11:22:33:44:99" in dropped_v6["ids"], "MAC a 17 caratteri preservato con drop_ipv6")
 
+        # =====================================================================
+        # 18. TEST STATISTICHE, ANALYTICS & EXPORT CENTER (v1.5.0)
+        # =====================================================================
+        print("\n📊 [18/18] TEST STATISTICHE, ANALYTICS & EXPORT CENTER (v1.5.0)")
+
+        # 1. Test GET /api/analytics/distribution
+        dist_res = await client.get("/api/analytics/distribution")
+        runner.assert_true(dist_res.status_code == 200, "GET /api/analytics/distribution risponde HTTP 200")
+        dist_data = dist_res.json()
+        runner.assert_true(dist_data.get("status") == "success", "Distribution restituisce status 'success'")
+        runner.assert_true("total_devices" in dist_data and dist_data["total_devices"] >= 0, "total_devices valido")
+        runner.assert_true("active_devices" in dist_data and dist_data["active_devices"] >= 0, "active_devices valido")
+        runner.assert_true(isinstance(dist_data.get("frequencies"), list), "frequencies è un array")
+        runner.assert_true(len(dist_data.get("frequencies", [])) > 0, "Almeno una frequenza presente nella distribuzione")
+        runner.assert_true(isinstance(dist_data.get("node_load"), list), "node_load è un array")
+        runner.assert_true(len(dist_data.get("node_load", [])) > 0, "Almeno un nodo presente nel carico mesh")
+        runner.assert_true(isinstance(dist_data.get("categories"), list), "categories è un array")
+        runner.assert_true(isinstance(dist_data.get("vendors"), list), "vendors è un array")
+
+        # 2. Test GET /api/analytics/isp-sla (30 giorni e 7 giorni)
+        sla30_res = await client.get("/api/analytics/isp-sla?days=30")
+        runner.assert_true(sla30_res.status_code == 200, "GET /api/analytics/isp-sla?days=30 risponde HTTP 200")
+        sla30_data = sla30_res.json()
+        runner.assert_true(sla30_data.get("status") == "success", "SLA restituisce status 'success'")
+        sla_info = sla30_data.get("sla", {})
+        runner.assert_true(sla_info.get("period_days") == 30, "Periodo SLA impostato a 30 giorni")
+        runner.assert_true("reliability_score" in sla_info, "Indice reliability_score presente")
+        runner.assert_true(0 <= float(sla_info.get("reliability_score", 0)) <= 100, "reliability_score tra 0 e 100%")
+        runner.assert_true("avg_download_mbps" in sla_info, "avg_download_mbps presente")
+        runner.assert_true("avg_upload_mbps" in sla_info, "avg_upload_mbps presente")
+        runner.assert_true("avg_jitter_ms" in sla_info, "avg_jitter_ms presente")
+        runner.assert_true(isinstance(sla_info.get("history_points"), list), "history_points è una lista")
+
+        sla7_res = await client.get("/api/analytics/isp-sla?days=7")
+        runner.assert_true(sla7_res.status_code == 200, "GET /api/analytics/isp-sla?days=7 risponde HTTP 200")
+        runner.assert_true(sla7_res.json().get("sla", {}).get("period_days") == 7, "Periodo SLA impostato a 7 giorni")
+
+        # 3. Test Esportazione CSV
+        exp_dev_csv = await client.get("/api/analytics/export/devices?format=csv")
+        runner.assert_true(exp_dev_csv.status_code == 200, "GET /api/analytics/export/devices?format=csv risponde HTTP 200")
+        runner.assert_true("text/csv" in exp_dev_csv.headers.get("content-type", ""), "Content-Type è text/csv")
+        runner.assert_true("attachment;" in exp_dev_csv.headers.get("content-disposition", ""), "Header Content-Disposition contiene attachment")
+        runner.assert_true("mac" in exp_dev_csv.text and "hostname" in exp_dev_csv.text, "CSV dispositivi include colonne mac e hostname")
+
+        exp_sp_csv = await client.get("/api/analytics/export/speedtest?format=csv")
+        runner.assert_true(exp_sp_csv.status_code == 200, "GET /api/analytics/export/speedtest?format=csv risponde HTTP 200")
+        runner.assert_true("text/csv" in exp_sp_csv.headers.get("content-type", ""), "Content-Type speedtest è text/csv")
+
+        exp_sig_csv = await client.get("/api/analytics/export/signal?format=csv")
+        runner.assert_true(exp_sig_csv.status_code == 200, "GET /api/analytics/export/signal?format=csv risponde HTTP 200")
+        runner.assert_true("text/csv" in exp_sig_csv.headers.get("content-type", ""), "Content-Type signal è text/csv")
+
+        exp_usg_csv = await client.get("/api/analytics/export/usage?format=csv")
+        runner.assert_true(exp_usg_csv.status_code == 200, "GET /api/analytics/export/usage?format=csv risponde HTTP 200")
+        runner.assert_true("text/csv" in exp_usg_csv.headers.get("content-type", ""), "Content-Type usage è text/csv")
+
+        # 4. Test Esportazione JSON
+        exp_dev_json = await client.get("/api/analytics/export/devices?format=json")
+        runner.assert_true(exp_dev_json.status_code == 200, "GET /api/analytics/export/devices?format=json risponde HTTP 200")
+        runner.assert_true("application/json" in exp_dev_json.headers.get("content-type", ""), "Content-Type è application/json")
+        dev_json_payload = exp_dev_json.json()
+        runner.assert_true(dev_json_payload.get("status") == "success", "Export JSON restituisce status success")
+        runner.assert_true(isinstance(dev_json_payload.get("data"), list), "Export JSON contiene campo 'data' di tipo array")
+
+        # 5. Test Gestione Errori Esportazione
+        exp_invalid = await client.get("/api/analytics/export/unknown_dataset?format=csv")
+        runner.assert_true(exp_invalid.status_code == 400, "Richiesta esportazione dataset non valido restituisce HTTP 400")
+
     runner.print_summary()
 
 

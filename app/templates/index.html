@@ -442,7 +442,26 @@
           <span x-show="!sidebarCollapsed" class="ml-3 truncate" x-text="t('nav.speedtest')"></span>
         </button>
 
-        <!-- 4. Controls & Guest QR -->
+        <!-- 4. Analytics & SLA -->
+        <button 
+          @click="setTab('analytics')"
+          :class="[
+            sidebarCollapsed 
+              ? 'w-11 h-11 mx-auto justify-center p-0' 
+              : 'w-full px-3 py-2.5 justify-start',
+            currentTab === 'analytics'
+              ? 'bg-[#0067c0]/15 text-[#0067c0] dark:bg-sky-500/20 dark:text-sky-400 font-bold border-[#0067c0]/30 dark:border-sky-500/40 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] border-transparent'
+          ]"
+          class="flex items-center rounded-xl text-xs font-semibold border transition-all cursor-pointer group relative"
+          :title="sidebarCollapsed ? t('nav.analytics') : ''">
+          <div class="w-5 h-5 flex items-center justify-center shrink-0">
+            <svg class="w-5 h-5 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+          </div>
+          <span x-show="!sidebarCollapsed" class="ml-3 truncate" x-text="t('nav.analytics')"></span>
+        </button>
+
+        <!-- 5. Controls & Guest QR -->
         <button 
           @click="setTab('automations')"
           :class="[
@@ -1496,6 +1515,345 @@
                 </template>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- TAB: STATISTICHE & ANALYTICS & EXPORT -->
+    <!-- =================================================================== -->
+    <div x-show="currentTab === 'analytics'" class="space-y-6 animate-fade-in" style="display: none;">
+      
+      <!-- Top Action & Title Bar -->
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+            <svg class="w-6 h-6 text-[#0067c0] dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            <span x-text="t('analytics.page_title')"></span>
+          </h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" x-text="t('analytics.page_subtitle')"></p>
+        </div>
+
+        <div class="flex items-center space-x-3">
+          <button 
+            @click="loadAnalyticsData(true)"
+            :disabled="analyticsLoading"
+            class="px-4 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-xs transition flex items-center space-x-2 cursor-pointer disabled:opacity-50">
+            <svg class="w-4 h-4 text-[#0067c0] dark:text-sky-400" :class="{'animate-spin': analyticsLoading}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span x-text="analyticsLoading ? t('header.refreshing') : t('header.refresh')"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 4 KPI Summary Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Card 1: ISP Reliability Score -->
+        <div class="glass-panel rounded-2xl p-5 border border-slate-200 dark:border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400" x-text="t('analytics.kpi_isp_reliability')"></span>
+            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+            </svg>
+          </div>
+          <div class="flex items-baseline space-x-2">
+            <span class="text-3xl font-extrabold text-slate-900 dark:text-white font-mono" x-text="analyticsSla ? (analyticsSla.reliability_score + '%') : '--'"></span>
+            <span 
+              class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+              :class="(analyticsSla && analyticsSla.reliability_score >= 90) ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'"
+              x-text="(analyticsSla && analyticsSla.reliability_score >= 90) ? 'SLA OK' : 'Degraded'">
+            </span>
+          </div>
+          <div class="mt-2 text-xs text-slate-500 dark:text-slate-400" x-text="t('analytics.kpi_isp_reliability_sub')"></div>
+        </div>
+
+        <!-- Card 2: Avg WAN Speed -->
+        <div class="glass-panel rounded-2xl p-5 border border-slate-200 dark:border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400" x-text="t('analytics.kpi_avg_wan')"></span>
+            <svg class="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+            </svg>
+          </div>
+          <div class="flex items-baseline space-x-2">
+            <span class="text-2xl font-bold text-sky-600 dark:text-sky-400 font-mono" x-text="analyticsSla ? analyticsSla.avg_download_mbps : '--'"></span>
+            <span class="text-xs text-slate-500 font-medium">↓ Mbps</span>
+            <span class="text-slate-400">/</span>
+            <span class="text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono" x-text="analyticsSla ? analyticsSla.avg_upload_mbps : '--'"></span>
+            <span class="text-xs text-slate-500 font-medium">↑ Mbps</span>
+          </div>
+          <div class="mt-2 text-xs text-slate-500 dark:text-slate-400" x-text="t('analytics.kpi_avg_wan_sub')"></div>
+        </div>
+
+        <!-- Card 3: Latency & Jitter -->
+        <div class="glass-panel rounded-2xl p-5 border border-slate-200 dark:border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400" x-text="t('analytics.kpi_latency_jitter')"></span>
+            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <div class="flex items-baseline space-x-2">
+            <span class="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono" x-text="analyticsSla ? (analyticsSla.avg_ping_ms + ' ms') : '--'"></span>
+            <span class="text-xs font-mono text-slate-500 dark:text-slate-400" x-text="analyticsSla ? ('(±' + analyticsSla.avg_jitter_ms + ' ms jitter)') : ''"></span>
+          </div>
+          <div class="mt-2 text-xs text-slate-500 dark:text-slate-400" x-text="t('analytics.kpi_latency_jitter_sub')"></div>
+        </div>
+
+        <!-- Card 4: Mesh Device Density -->
+        <div class="glass-panel rounded-2xl p-5 border border-slate-200 dark:border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400" x-text="t('analytics.kpi_mesh_density')"></span>
+            <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+            </svg>
+          </div>
+          <div class="flex items-baseline space-x-2">
+            <span class="text-3xl font-extrabold text-slate-900 dark:text-white font-mono" x-text="analyticsDistribution ? analyticsDistribution.active_devices : 0"></span>
+            <span class="text-xs text-slate-500 font-medium">client online</span>
+            <span class="text-xs text-slate-400" x-text="analyticsDistribution ? ('/ ' + analyticsDistribution.total_devices + ' tot') : ''"></span>
+          </div>
+          <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <span x-text="t('analytics.kpi_mesh_density_sub')"></span>: <span class="font-semibold text-slate-700 dark:text-slate-300" x-text="(analyticsDistribution && analyticsDistribution.node_load && analyticsDistribution.node_load.length > 0) ? (Number(analyticsDistribution.active_devices / analyticsDistribution.node_load.length).toFixed(1) + ' client/nodo') : '--'"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2x2 Network Distribution Charts Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Chart 1: Wi-Fi Frequencies & Wired -->
+        <div class="glass-panel rounded-2xl p-6 space-y-4 border border-slate-200 dark:border-slate-800">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white" x-text="t('analytics.chart_frequencies_title')"></h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="t('analytics.chart_frequencies_desc')"></p>
+          </div>
+          <div class="relative h-64 w-full flex items-center justify-center">
+            <canvas id="analyticsFrequenciesChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 2: Node Load Distribution -->
+        <div class="glass-panel rounded-2xl p-6 space-y-4 border border-slate-200 dark:border-slate-800">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white" x-text="t('analytics.chart_nodes_title')"></h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="t('analytics.chart_nodes_desc')"></p>
+          </div>
+          <div class="relative h-64 w-full">
+            <canvas id="analyticsNodeLoadChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 3: Device Categories -->
+        <div class="glass-panel rounded-2xl p-6 space-y-4 border border-slate-200 dark:border-slate-800">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white" x-text="t('analytics.chart_categories_title')"></h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="t('analytics.chart_categories_desc')"></p>
+          </div>
+          <div class="relative h-64 w-full flex items-center justify-center">
+            <canvas id="analyticsCategoriesChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 4: Hardware Vendors (OUI) -->
+        <div class="glass-panel rounded-2xl p-6 space-y-4 border border-slate-200 dark:border-slate-800">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white" x-text="t('analytics.chart_vendors_title')"></h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="t('analytics.chart_vendors_desc')"></p>
+          </div>
+          <div class="relative h-64 w-full">
+            <canvas id="analyticsVendorsChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ISP SLA Performance Trends Section -->
+      <div class="glass-panel rounded-2xl p-6 space-y-5 border border-slate-200 dark:border-slate-800">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-black/[0.06] dark:border-white/5 pb-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+              <svg class="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+              </svg>
+              <span x-text="t('analytics.sla_section_title')"></span>
+            </h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="t('analytics.sla_section_desc')"></p>
+          </div>
+
+          <!-- Period Toggle -->
+          <div class="inline-flex rounded-xl p-1 bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/5">
+            <button 
+              @click="fetchAnalyticsSla(7)"
+              :class="analyticsSlaDays === 7 ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
+              class="px-3 py-1.5 rounded-lg text-xs transition cursor-pointer"
+              x-text="t('analytics.sla_period_7d')">
+            </button>
+            <button 
+              @click="fetchAnalyticsSla(30)"
+              :class="analyticsSlaDays === 30 ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
+              class="px-3 py-1.5 rounded-lg text-xs transition cursor-pointer"
+              x-text="t('analytics.sla_period_30d')">
+            </button>
+          </div>
+        </div>
+
+        <!-- SLA Line Chart -->
+        <div class="relative h-72 w-full">
+          <canvas id="analyticsSlaChart"></canvas>
+        </div>
+
+        <!-- SLA Metrics Bar -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-center">
+            <div class="text-[11px] text-slate-500 dark:text-slate-400" x-text="t('analytics.sla_metric_tests')"></div>
+            <div class="text-base font-bold font-mono text-slate-900 dark:text-white mt-0.5" x-text="analyticsSla ? analyticsSla.total_tests : 0"></div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-center">
+            <div class="text-[11px] text-slate-500 dark:text-slate-400" x-text="t('analytics.sla_metric_peak_dl')"></div>
+            <div class="text-base font-bold font-mono text-sky-600 dark:text-sky-400 mt-0.5" x-text="analyticsSla ? (analyticsSla.max_download_mbps + ' Mbps') : '--'"></div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-center">
+            <div class="text-[11px] text-slate-500 dark:text-slate-400" x-text="t('analytics.sla_metric_peak_ul')"></div>
+            <div class="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5" x-text="analyticsSla ? (analyticsSla.max_upload_mbps + ' Mbps') : '--'"></div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-center">
+            <div class="text-[11px] text-slate-500 dark:text-slate-400" x-text="t('analytics.sla_metric_min_ping')"></div>
+            <div class="text-base font-bold font-mono text-amber-600 dark:text-amber-400 mt-0.5" x-text="analyticsSla ? (analyticsSla.min_ping_ms + ' ms') : '--'"></div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-center">
+            <div class="text-[11px] text-slate-500 dark:text-slate-400" x-text="t('analytics.sla_metric_avg_jitter')"></div>
+            <div class="text-base font-bold font-mono text-slate-700 dark:text-slate-300 mt-0.5" x-text="analyticsSla ? (analyticsSla.avg_jitter_ms + ' ms') : '--'"></div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-center">
+            <div class="text-[11px] text-slate-500 dark:text-slate-400" x-text="t('analytics.sla_metric_score')"></div>
+            <div class="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5" x-text="analyticsSla ? (analyticsSla.reliability_score + '%') : '--'"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Export Center -->
+      <div class="glass-panel rounded-2xl p-6 space-y-5 border border-slate-200 dark:border-slate-800">
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+            </svg>
+            <span x-text="t('analytics.export_section_title')"></span>
+          </h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="t('analytics.export_section_desc')"></p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Dataset 1: Devices -->
+          <div class="p-5 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4 shadow-xs">
+            <div>
+              <div class="flex items-center space-x-2.5 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-sky-50 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                </div>
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white" x-text="t('analytics.export_devices_title')"></h4>
+              </div>
+              <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed" x-text="t('analytics.export_devices_desc')"></p>
+            </div>
+            <div class="flex items-center space-x-2 pt-2">
+              <button 
+                @click="exportData('devices', 'csv')"
+                :disabled="exportLoading"
+                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition cursor-pointer disabled:opacity-50 text-center"
+                x-text="t('analytics.export_btn_csv')">
+              </button>
+              <button 
+                @click="exportData('devices', 'json')"
+                :disabled="exportLoading"
+                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition cursor-pointer disabled:opacity-50 text-center"
+                x-text="t('analytics.export_btn_json')">
+              </button>
+            </div>
+          </div>
+
+          <!-- Dataset 2: Speedtest -->
+          <div class="p-5 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4 shadow-xs">
+            <div>
+              <div class="flex items-center space-x-2.5 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white" x-text="t('analytics.export_speedtest_title')"></h4>
+              </div>
+              <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed" x-text="t('analytics.export_speedtest_desc')"></p>
+            </div>
+            <div class="flex items-center space-x-2 pt-2">
+              <button 
+                @click="exportData('speedtest', 'csv')"
+                :disabled="exportLoading"
+                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition cursor-pointer disabled:opacity-50 text-center"
+                x-text="t('analytics.export_btn_csv')">
+              </button>
+              <button 
+                @click="exportData('speedtest', 'json')"
+                :disabled="exportLoading"
+                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition cursor-pointer disabled:opacity-50 text-center"
+                x-text="t('analytics.export_btn_json')">
+              </button>
+            </div>
+          </div>
+
+          <!-- Dataset 3: Signal RSSI -->
+          <div class="p-5 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4 shadow-xs">
+            <div>
+              <div class="flex items-center space-x-2.5 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>
+                </div>
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white" x-text="t('analytics.export_signal_title')"></h4>
+              </div>
+              <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed" x-text="t('analytics.export_signal_desc')"></p>
+            </div>
+            <div class="flex items-center space-x-2 pt-2">
+              <button 
+                @click="exportData('signal', 'csv')"
+                :disabled="exportLoading"
+                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition cursor-pointer disabled:opacity-50 text-center"
+                x-text="t('analytics.export_btn_csv')">
+              </button>
+              <button 
+                @click="exportData('signal', 'json')"
+                :disabled="exportLoading"
+                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition cursor-pointer disabled:opacity-50 text-center"
+                x-text="t('analytics.export_btn_json')">
+              </button>
+            </div>
+          </div>
+
+          <!-- Dataset 4: Data Usage -->
+          <div class="p-5 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4 shadow-xs">
+            <div>
+              <div class="flex items-center space-x-2.5 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                </div>
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white" x-text="t('analytics.export_usage_title')"></h4>
+              </div>
+              <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed" x-text="t('analytics.export_usage_desc')"></p>
+            </div>
+            <div class="flex items-center space-x-2 pt-2">
+              <button 
+                @click="exportData('usage', 'csv')"
+                :disabled="exportLoading"
+                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition cursor-pointer disabled:opacity-50 text-center"
+                x-text="t('analytics.export_btn_csv')">
+              </button>
+              <button 
+                @click="exportData('usage', 'json')"
+                :disabled="exportLoading"
+                class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition cursor-pointer disabled:opacity-50 text-center"
+                x-text="t('analytics.export_btn_json')">
+              </button>
+            </div>
           </div>
         </div>
       </div>

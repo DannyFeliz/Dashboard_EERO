@@ -71,6 +71,37 @@ document.addEventListener('alpine:init', () => {
     topHogsPeriod: 'daily',
     topHogsLoading: false,
 
+    // Statistics & Analytics State (v1.5.0)
+    analyticsLoading: false,
+    analyticsDistribution: {
+      total_devices: 0,
+      active_devices: 0,
+      frequencies: [],
+      node_load: [],
+      categories: [],
+      vendors: []
+    },
+    analyticsSla: {
+      total_tests: 0,
+      period_days: 30,
+      avg_download_mbps: 0,
+      max_download_mbps: 0,
+      min_download_mbps: 0,
+      avg_upload_mbps: 0,
+      max_upload_mbps: 0,
+      min_upload_mbps: 0,
+      avg_ping_ms: 0,
+      min_ping_ms: 0,
+      max_ping_ms: 0,
+      avg_jitter_ms: 0,
+      max_jitter_ms: 0,
+      reliability_score: 100,
+      history_points: []
+    },
+    analyticsSlaDays: 30,
+    analyticsChartInstances: {},
+    exportLoading: false,
+
     // Bandwidth Historian State
     selectedWanRange: 24, // 24h, 168 (7d), 720 (30d)
     wanTotalGb: 0,
@@ -283,6 +314,8 @@ document.addEventListener('alpine:init', () => {
           setTimeout(() => {
             this.loadSignalOverview();
           }, 50);
+        } else if (tab === 'analytics') {
+          this.loadAnalyticsData();
         } else if (tab === 'automations' || tab === 'controls') {
           this.fetchNightMode();
           this.fetchNotificationSettings();
@@ -385,7 +418,8 @@ document.addEventListener('alpine:init', () => {
         this.wanChartInstance,
         this.hogsChartInstance,
         this.speedtestChartInstance,
-        this.signalChartInstance
+        this.signalChartInstance,
+        ...(this.analyticsChartInstances ? Object.values(this.analyticsChartInstances) : [])
       ];
 
       charts.forEach(chart => {
@@ -527,6 +561,10 @@ document.addEventListener('alpine:init', () => {
         setTimeout(async () => {
           await this.loadSpeedtestData();
           await this.loadSignalOverview();
+        }, 50);
+      } else if (tab === 'analytics') {
+        setTimeout(async () => {
+          await this.loadAnalyticsData();
         }, 50);
       } else if (tab === 'devices') {
         await this.fetchDevices();
@@ -3221,6 +3259,361 @@ document.addEventListener('alpine:init', () => {
           }
         }
       });
+    },
+
+    // =========================================================================
+    // ANALYTICS, DISTRIBUTION & ISP SLA (v1.5.0)
+    // =========================================================================
+    async loadAnalyticsData(force = false) {
+      this.analyticsLoading = true;
+      try {
+        await Promise.all([
+          this.fetchAnalyticsDistribution(),
+          this.fetchAnalyticsSla(this.analyticsSlaDays)
+        ]);
+        this.$nextTick(() => {
+          this.renderAnalyticsCharts();
+        });
+      } catch (err) {
+        console.error("Load analytics data error:", err);
+      } finally {
+        this.analyticsLoading = false;
+      }
+    },
+
+    async fetchAnalyticsDistribution() {
+      try {
+        const res = await fetch('/api/analytics/distribution');
+        const data = await res.json();
+        if (data.status === 'success') {
+          this.analyticsDistribution = data;
+        }
+      } catch (err) {
+        console.error("Fetch distribution error:", err);
+      }
+    },
+
+    async fetchAnalyticsSla(days = 30) {
+      this.analyticsSlaDays = days;
+      try {
+        const res = await fetch(`/api/analytics/isp-sla?days=${days}`);
+        const data = await res.json();
+        if (data.status === 'success' && data.sla) {
+          this.analyticsSla = data.sla;
+          this.$nextTick(() => {
+            this.renderSlaChart();
+          });
+        }
+      } catch (err) {
+        console.error("Fetch SLA error:", err);
+      }
+    },
+
+    renderAnalyticsCharts() {
+      this.renderFrequenciesChart();
+      this.renderNodeLoadChart();
+      this.renderCategoriesChart();
+      this.renderVendorsChart();
+      this.renderSlaChart();
+    },
+
+    renderFrequenciesChart() {
+      const canvas = document.getElementById('analyticsFrequenciesChart');
+      if (!canvas) return;
+      if (this.analyticsChartInstances['frequencies']) {
+        this.analyticsChartInstances['frequencies'].destroy();
+      }
+      const freqs = this.analyticsDistribution.frequencies || [];
+      const labels = freqs.map(f => f.band);
+      const data = freqs.map(f => f.count);
+      const colors = this.getChartThemeColors();
+
+      this.analyticsChartInstances['frequencies'] = new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: [
+              '#38bdf8', // 6 GHz
+              '#0067c0', // 5 GHz
+              '#818cf8', // 2.4 GHz
+              '#10b981'  // Ethernet
+            ],
+            borderColor: colors.isDark ? '#262626' : '#ffffff',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } }
+            }
+          },
+          cutout: '65%'
+        }
+      });
+    },
+
+    renderNodeLoadChart() {
+      const canvas = document.getElementById('analyticsNodeLoadChart');
+      if (!canvas) return;
+      if (this.analyticsChartInstances['nodeLoad']) {
+        this.analyticsChartInstances['nodeLoad'].destroy();
+      }
+      const nodes = this.analyticsDistribution.node_load || [];
+      const labels = nodes.map(n => n.name);
+      const data = nodes.map(n => n.client_count);
+      const colors = this.getChartThemeColors();
+
+      this.analyticsChartInstances['nodeLoad'] = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Client Connessi',
+            data: data,
+            backgroundColor: 'rgba(0, 103, 192, 0.8)',
+            borderColor: '#0067c0',
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              ticks: { color: colors.ticksColor, precision: 0 },
+              grid: { color: colors.gridColor }
+            },
+            y: {
+              ticks: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    },
+
+    renderCategoriesChart() {
+      const canvas = document.getElementById('analyticsCategoriesChart');
+      if (!canvas) return;
+      if (this.analyticsChartInstances['categories']) {
+        this.analyticsChartInstances['categories'].destroy();
+      }
+      const cats = this.analyticsDistribution.categories || [];
+      const labels = cats.map(c => c.category);
+      const data = cats.map(c => c.count);
+      const colors = this.getChartThemeColors();
+
+      this.analyticsChartInstances['categories'] = new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: [
+              '#0067c0', '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#64748b'
+            ],
+            borderColor: colors.isDark ? '#262626' : '#ffffff',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } }
+            }
+          },
+          cutout: '65%'
+        }
+      });
+    },
+
+    renderVendorsChart() {
+      const canvas = document.getElementById('analyticsVendorsChart');
+      if (!canvas) return;
+      if (this.analyticsChartInstances['vendors']) {
+        this.analyticsChartInstances['vendors'].destroy();
+      }
+      const vends = (this.analyticsDistribution.vendors || []).slice(0, 6);
+      const labels = vends.map(v => v.vendor);
+      const data = vends.map(v => v.count);
+      const colors = this.getChartThemeColors();
+
+      this.analyticsChartInstances['vendors'] = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Dispositivi',
+            data: data,
+            backgroundColor: 'rgba(99, 102, 241, 0.8)',
+            borderColor: '#6366f1',
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              ticks: { color: colors.ticksColor, font: { family: colors.fontFamily, size: 10 } },
+              grid: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { color: colors.ticksColor, precision: 0 },
+              grid: { color: colors.gridColor }
+            }
+          }
+        }
+      });
+    },
+
+    renderSlaChart() {
+      const canvas = document.getElementById('analyticsSlaChart');
+      if (!canvas) return;
+      if (this.analyticsChartInstances['sla']) {
+        this.analyticsChartInstances['sla'].destroy();
+      }
+      const points = this.analyticsSla.history_points || [];
+      const labels = points.map(p => {
+        const d = new Date(p.timestamp);
+        return isNaN(d.getTime()) ? p.timestamp : d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      });
+      const dlData = points.map(p => p.download_mbps);
+      const ulData = points.map(p => p.upload_mbps);
+      const pingData = points.map(p => p.ping_ms);
+      const colors = this.getChartThemeColors();
+
+      this.analyticsChartInstances['sla'] = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Download (Mbps)',
+              data: dlData,
+              borderColor: '#0067c0',
+              backgroundColor: 'rgba(0, 103, 192, 0.1)',
+              borderWidth: 2,
+              pointRadius: 2,
+              tension: 0.3,
+              fill: true,
+              yAxisID: 'y'
+            },
+            {
+              label: 'Upload (Mbps)',
+              data: ulData,
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.05)',
+              borderWidth: 2,
+              pointRadius: 2,
+              tension: 0.3,
+              fill: true,
+              yAxisID: 'y'
+            },
+            {
+              label: 'Ping (ms)',
+              data: pingData,
+              borderColor: '#f59e0b',
+              borderWidth: 1.5,
+              pointRadius: 2,
+              borderDash: [4, 4],
+              tension: 0.3,
+              fill: false,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { color: colors.isDark ? '#cbd5e1' : '#334155', font: { family: colors.fontFamily, size: 11 } }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: colors.ticksColor, maxTicksLimit: 8, font: { size: 10 } },
+              grid: { color: colors.gridColor }
+            },
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              beginAtZero: true,
+              ticks: { color: colors.ticksColor, font: { size: 10 } },
+              grid: { color: colors.gridColor },
+              title: { display: true, text: 'Throughput (Mbps)', color: colors.ticksColor, font: { size: 10 } }
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              beginAtZero: true,
+              ticks: { color: '#f59e0b', font: { size: 10 } },
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: 'Latenza (ms)', color: '#f59e0b', font: { size: 10 } }
+            }
+          }
+        }
+      });
+    },
+
+    async exportData(dataType, format) {
+      this.exportLoading = true;
+      try {
+        const url = `/api/analytics/export/${encodeURIComponent(dataType)}?format=${encodeURIComponent(format)}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`Export failed: ${res.statusText}`);
+        }
+        const blob = await res.blob();
+        const disposition = res.headers.get('Content-Disposition') || '';
+        let filename = `eero_${dataType}_export.${format}`;
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+        const succTitle = this.currentLanguage === 'it' ? 'Esportazione Dati' : 'Data Export';
+        const succMsg = this.currentLanguage === 'it' ? `File ${filename} scaricato con successo.` : `File ${filename} downloaded successfully.`;
+        this.showToast(succTitle, succMsg, 'success');
+      } catch (err) {
+        console.error("Export error:", err);
+        const errTitle = this.currentLanguage === 'it' ? 'Errore Esportazione' : 'Export Error';
+        this.showToast(errTitle, err.message, 'error');
+      } finally {
+        this.exportLoading = false;
+      }
     },
 
     // =========================================================================

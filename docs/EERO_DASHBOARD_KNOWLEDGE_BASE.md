@@ -30,6 +30,7 @@
    * 4.13 [Notifiche Telegram, Webhook & Daily Digest](#413-notifiche-telegram-webhook--daily-digest)
    * 4.14 [Speed Test & Analisi Prestazioni Gateway](#414-speed-test--analisi-prestazioni-gateway)
    * 4.15 [Modalità Demo (Simulatore Integrato Dual-Network)](#415-modalità-demo-simulatore-integrato-dual-network)
+   * 4.16 [Statistiche & Analytics di Rete, SLA ISP & Data Export Center (v1.5.0)](#416-statistiche--analytics-di-rete-sla-isp--data-export-center-v150)
 5. [Specifiche del Database SQLite (`metrics.db`)](#5-specifiche-del-database-sqlite-metricsdb)
 6. [Catalogo Completo API REST (Endpoint Reference)](#6-catalogo-completo-api-rest-endpoint-reference)
 7. [Variabili d'Ambiente & Configurazione (`.env`)](#7-variabili-dambiente--configurazione-env)
@@ -217,6 +218,25 @@ Finestra modale con spiegazione dettagliata in bilingue, elenco delle penalità 
   1. **Casa Rossi Mesh 6E:** Topologia a 3 nodi con gateway eero Pro 6E, nodi mesh wireless 6 GHz e dispositivi consumer.
   2. **Ufficio & Studio Pro Mesh:** Rete avanzata con gateway eero Max 7, porte 2.5/10 Gbps, nodi extender PoE e server locali (Proxmox, TrueNAS, switch gestiti).
 
+### 4.16 Statistiche & Analytics di Rete, SLA ISP & Data Export Center (v1.5.0)
+* **Nuova Vista UI Dedicata:** Scheda "Statistiche & Analytics" accessibile dalla sidebar principale, disegnata con linee guida Windows 11 Fluent e rigorosa assenza di emoji (iconografia SVG pura).
+* **4 Card KPI di Sintesi Rete:**
+  1. *Affidabilità Provider (SLA):* Indice percentuale (0-100%) calcolato ponderando la costanza delle velocità misurate rispetto alla banda massima contrattuale registrata e la presenza di test degradati (<70% del picco).
+  2. *Velocità Media WAN:* Velocità media aggregata di Download e Upload registrata nei test storici.
+  3. *Latenza & Jitter Medio:* Tempo medio di ping e varianza millisecondica (jitter) che misura la stabilità della linea internet.
+  4. *Densità Dispositivi Mesh:* Rapporto medio client/nodo e conteggio apparati attivi rispetto alla capacità dell'infrastruttura.
+* **Griglia 2x2 Grafici di Ripartizione Rete (Chart.js):**
+  * *Distribuzione Frequenze:* Analisi a ciambella della ripartizione dei client tra 6 GHz (Wi-Fi 6E/7), 5 GHz, 2.4 GHz e connessioni fisiche Ethernet.
+  * *Carico Nodi Mesh:* Grafico a barre orizzontali del numero di client associati a ciascun beacon eero.
+  * *Categorie Dispositivi:* Suddivisione visiva dei client per tipologia d'uso.
+  * *Top Produttori Hardware (OUI):* Fingerprinting dei dispositivi basato sui primi 3 ottetti del MAC address per riconoscere i vendor dominanti nella rete.
+* **Trend Temporale & Monitoraggio SLA ISP:**
+  * Grafico multilinea a doppio asse Y (Throughput WAN vs Ping) con periodo selezionabile (7 o 30 giorni).
+  * Tabella KPI con picco download/upload, ping minimo e numero test condotti.
+* **Centro Esportazione Dati Aperto (Data Export Center):**
+  * Esportazione istantanea con 1 clic in formato CSV RFC 4180 o JSON formattato UTF-8 con header HTTP `Content-Disposition: attachment`.
+  * 4 Dataset esportabili: `devices` (anagrafica e dettagli tecnici client), `speedtest` (storico WAN), `signal` (serie temporale RSSI dBm), `usage` (volumi dati consumati).
+
 ---
 
 ## 5. Specifiche del Database SQLite (`metrics.db`)
@@ -328,6 +348,9 @@ Tutti gli endpoint rispondono in formato JSON con intestazione `application/json
 | **GET** | `/api/metrics/signal/history` | Storico temporale potenza RSSI per un client | `?mac_address=...&hours=24` |
 | **GET** | `/api/system/update/check` | Verifica disponibilità aggiornamenti Docker/GitHub | `?force=true` |
 | **POST** | `/api/system/update/trigger` | Avvia aggiornamento automatico 1-clic del container | Nessuno |
+| **GET** | `/api/analytics/distribution` | Distribuzione frequenze Wi-Fi, carico nodi mesh, categorie e vendor OUI (v1.5.0) | Nessuno |
+| **GET** | `/api/analytics/isp-sla` | Trend temporale e indice SLA affidabilità provider internet (v1.5.0) | `?days=7|30` |
+| **GET** | `/api/analytics/export/{data_type}` | Esportazione dataset (devices, speedtest, signal, usage) in formato CSV o JSON (v1.5.0) | `?format=csv|json&limit=500` |
 | **GET** | `/api/manual/chapters` | Elenco capitoli e argomenti del manuale integrato | `?lang=it|en` |
 | **GET** | `/api/manual/chapter/{id}` | Contenuto HTML formattato di un capitolo del manuale | `?lang=it|en` |
 

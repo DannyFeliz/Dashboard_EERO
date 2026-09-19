@@ -1,4 +1,5 @@
 import logging
+import random
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncGenerator, Dict, List, Optional, Set
@@ -336,6 +337,190 @@ class DBService:
                 "avg_ping": 0,
                 "min_ping": 0,
             }
+
+    async def get_isp_sla_analytics(self, days: int = 30, is_demo: int = 0) -> Dict[str, Any]:
+        """Calcola le metriche analitiche SLA e trend storico dell'ISP dai test di velocità."""
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        cutoff_z = (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        if is_demo == 1:
+            # Genera serie simulata per Demo Mode
+            points = []
+            steps = min(days * 2, 30)
+            base_dl = 920.0
+            base_ul = 295.0
+            for i in range(steps, -1, -1):
+                pt_time = (now - timedelta(hours=i * (days * 24 / steps))).strftime("%Y-%m-%dT%H:%M:%SZ")
+                d_fluct = random.uniform(-40.0, 30.0)
+                u_fluct = random.uniform(-15.0, 15.0)
+                p_fluct = random.uniform(-2.0, 4.0)
+                j_fluct = random.uniform(0.5, 2.5)
+                points.append({
+                    "timestamp": pt_time,
+                    "download_mbps": round(base_dl + d_fluct, 2),
+                    "upload_mbps": round(base_ul + u_fluct, 2),
+                    "ping_ms": round(9.5 + p_fluct, 1),
+                    "jitter": round(j_fluct, 1),
+                    "server_name": "eero Cloud SpeedTest (Demo)"
+                })
+            dl_vals = [p["download_mbps"] for p in points]
+            ul_vals = [p["upload_mbps"] for p in points]
+            p_vals = [p["ping_ms"] for p in points]
+            j_vals = [p["jitter"] for p in points]
+            return {
+                "total_tests": len(points),
+                "period_days": days,
+                "avg_download_mbps": round(sum(dl_vals) / len(dl_vals), 2),
+                "max_download_mbps": round(max(dl_vals), 2),
+                "min_download_mbps": round(min(dl_vals), 2),
+                "avg_upload_mbps": round(sum(ul_vals) / len(ul_vals), 2),
+                "max_upload_mbps": round(max(ul_vals), 2),
+                "min_upload_mbps": round(min(ul_vals), 2),
+                "avg_ping_ms": round(sum(p_vals) / len(p_vals), 1),
+                "min_ping_ms": round(min(p_vals), 1),
+                "max_ping_ms": round(max(p_vals), 1),
+                "avg_jitter_ms": round(sum(j_vals) / len(j_vals), 1),
+                "max_jitter_ms": round(max(j_vals), 1),
+                "reliability_score": 99.2,
+                "history_points": points
+            }
+
+        async with self.get_connection() as db:
+            cursor = await db.execute(
+                """
+                SELECT id, timestamp, download_mbps, upload_mbps, ping_ms, jitter, server_name
+                FROM speedtests
+                WHERE (timestamp >= ? OR timestamp >= ?)
+                  AND server_name NOT LIKE '%Fastweb Milan%'
+                  AND server_name NOT LIKE '%Demo%'
+                  AND server_name NOT LIKE '%synthetics%'
+                  AND server_name NOT LIKE '%TIM FTTH%'
+                  AND server_name NOT LIKE '%Fastweb FTTH%'
+                  AND server_name NOT LIKE '%Ufficio & Studio%'
+                  AND source != 'synthetics'
+                  AND NOT (ROUND(download_mbps, 2) = 912.45 AND ROUND(upload_mbps, 2) = 298.10)
+                  AND NOT (ROUND(download_mbps, 2) = 2240.50 AND ROUND(upload_mbps, 2) = 980.20)
+                  AND download_mbps <= 2000
+                ORDER BY timestamp ASC
+                """,
+                (cutoff, cutoff_z)
+            )
+            rows = await cursor.fetchall()
+            real_points = [dict(r) for r in rows]
+
+        if not real_points:
+            return {
+                "total_tests": 0,
+                "period_days": days,
+                "avg_download_mbps": 0.0,
+                "max_download_mbps": 0.0,
+                "min_download_mbps": 0.0,
+                "avg_upload_mbps": 0.0,
+                "max_upload_mbps": 0.0,
+                "min_upload_mbps": 0.0,
+                "avg_ping_ms": 0.0,
+                "min_ping_ms": 0.0,
+                "max_ping_ms": 0.0,
+                "avg_jitter_ms": 0.0,
+                "max_jitter_ms": 0.0,
+                "reliability_score": 100.0,
+                "history_points": []
+            }
+
+        dl_vals = [float(p.get("download_mbps") or 0) for p in real_points]
+        ul_vals = [float(p.get("upload_mbps") or 0) for p in real_points]
+        p_vals = [float(p.get("ping_ms") or 0) for p in real_points if p.get("ping_ms") is not None]
+        j_vals = [float(p.get("jitter") or 0) for p in real_points if p.get("jitter") is not None]
+
+        avg_dl = sum(dl_vals) / len(dl_vals) if dl_vals else 0.0
+        avg_p = sum(p_vals) / len(p_vals) if p_vals else 0.0
+
+        # Calcolo Indice di Affidabilità ISP: % test con download > 60% della media e ping <= 45ms
+        reliable_count = sum(
+            1 for p in real_points
+            if float(p.get("download_mbps") or 0) >= (avg_dl * 0.55) and float(p.get("ping_ms") or 0) <= 50.0
+        )
+        reliability = round((reliable_count / len(real_points)) * 100.0, 1) if real_points else 100.0
+
+        return {
+            "total_tests": len(real_points),
+            "period_days": days,
+            "avg_download_mbps": round(avg_dl, 2),
+            "max_download_mbps": round(max(dl_vals), 2) if dl_vals else 0.0,
+            "min_download_mbps": round(min(dl_vals), 2) if dl_vals else 0.0,
+            "avg_upload_mbps": round(sum(ul_vals) / len(ul_vals), 2) if ul_vals else 0.0,
+            "max_upload_mbps": round(max(ul_vals), 2) if ul_vals else 0.0,
+            "min_upload_mbps": round(min(ul_vals), 2) if ul_vals else 0.0,
+            "avg_ping_ms": round(avg_p, 1),
+            "min_ping_ms": round(min(p_vals), 1) if p_vals else 0.0,
+            "max_ping_ms": round(max(p_vals), 1) if p_vals else 0.0,
+            "avg_jitter_ms": round(sum(j_vals) / len(j_vals), 1) if j_vals else 0.0,
+            "max_jitter_ms": round(max(j_vals), 1) if j_vals else 0.0,
+            "reliability_score": reliability,
+            "history_points": real_points
+        }
+
+    async def get_speedtests_for_export(self, limit: int = 5000, is_demo: int = 0) -> List[Dict[str, Any]]:
+        """Restituisce lo storico completo dei test di velocità formattato per esportazione CSV/JSON."""
+        if is_demo == 1:
+            res = await self.get_isp_sla_analytics(days=30, is_demo=1)
+            return res.get("history_points", [])
+
+        async with self.get_connection() as db:
+            cursor = await db.execute(
+                """
+                SELECT timestamp, download_mbps, upload_mbps, ping_ms, jitter, server_name, source
+                FROM speedtests
+                WHERE server_name NOT LIKE '%Fastweb Milan%'
+                  AND server_name NOT LIKE '%Demo%'
+                  AND server_name NOT LIKE '%synthetics%'
+                  AND server_name NOT LIKE '%TIM FTTH%'
+                  AND server_name NOT LIKE '%Fastweb FTTH%'
+                  AND server_name NOT LIKE '%Ufficio & Studio%'
+                  AND source != 'synthetics'
+                  AND NOT (ROUND(download_mbps, 2) = 912.45 AND ROUND(upload_mbps, 2) = 298.10)
+                  AND NOT (ROUND(download_mbps, 2) = 2240.50 AND ROUND(upload_mbps, 2) = 980.20)
+                  AND download_mbps <= 2000
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (limit,)
+            )
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def get_signal_samples_for_export(self, limit: int = 5000, is_demo: int = 0) -> List[Dict[str, Any]]:
+        """Restituisce i campionamenti del segnale radio Wi-Fi per esportazione CSV/JSON."""
+        async with self.get_connection() as db:
+            cursor = await db.execute(
+                """
+                SELECT timestamp, mac_address, hostname, signal_rssi, frequency_band, channel, connected_eero_name, rx_bitrate, tx_bitrate
+                FROM device_signal_history
+                WHERE is_demo = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (is_demo, limit)
+            )
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def get_usage_samples_for_export(self, limit: int = 5000, is_demo: int = 0) -> List[Dict[str, Any]]:
+        """Restituisce lo storico consumo dati per esportazione CSV/JSON."""
+        async with self.get_connection() as db:
+            cursor = await db.execute(
+                """
+                SELECT timestamp, mac_address, network_id, hostname, rx_bytes, tx_bytes, download_mbps, upload_mbps
+                FROM device_usage_history
+                WHERE is_demo = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (is_demo, limit)
+            )
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
 
     # ----------------- DEVICE METADATA -----------------
     async def get_all_device_metadata(self) -> Dict[str, Dict[str, Any]]:

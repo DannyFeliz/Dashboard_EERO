@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
-from app.routers import auth, automations, devices, manual, metrics, network, profiles, speedtest, system
+from app.routers import analytics, auth, automations, devices, manual, metrics, network, profiles, speedtest, system
 from app.services.db import db_service
 from app.services.eero_client import eero_client
 from app.services.poller import background_poller
@@ -92,6 +92,7 @@ app.include_router(speedtest.router)
 app.include_router(automations.router)
 app.include_router(manual.router)
 app.include_router(system.router)
+app.include_router(analytics.router)
 
 
 @app.get("/api/health")
