@@ -174,27 +174,32 @@ class DBService:
                     (key, val)
                 )
 
-            # Pulizia automatica completa dei dati mock/demo
-            await self.purge_all_mock_data()
+            # Pulizia automatica completa dei dati mock/demo (Issue #35)
+            await self.purge_all_mock_data(conn=db)
 
             await db.commit()
             logger.info("Database schema initialized successfully.")
 
-    async def purge_all_mock_data(self):
+    async def purge_all_mock_data(self, conn: Optional[aiosqlite.Connection] = None):
         """Elimina completamente tutti i dati mock/demo dai record speedtest."""
+        query = """
+            DELETE FROM speedtests 
+            WHERE server_name LIKE '%Fastweb Milan%' 
+               OR server_name LIKE '%Demo%' 
+               OR server_name LIKE '%synthetics%'
+               OR server_name LIKE '%Fastweb / Wind Tre%'
+               OR server_name LIKE '%TIM FTTH%'
+               OR (ROUND(download_mbps, 2) = 912.45 AND ROUND(upload_mbps, 2) = 298.10);
+        """
         try:
-            async with self.get_connection() as db:
-                await db.execute("""
-                    DELETE FROM speedtests 
-                    WHERE server_name LIKE '%Fastweb Milan%' 
-                       OR server_name LIKE '%Demo%' 
-                       OR server_name LIKE '%synthetics%'
-                       OR server_name LIKE '%Fastweb / Wind Tre%'
-                       OR server_name LIKE '%TIM FTTH%'
-                       OR (ROUND(download_mbps, 2) = 912.45 AND ROUND(upload_mbps, 2) = 298.10);
-                """)
-                await db.commit()
+            if conn is not None:
+                await conn.execute(query)
                 logger.info("Purged all demo/mock speedtest records from SQLite.")
+            else:
+                async with self.get_connection() as db:
+                    await db.execute(query)
+                    await db.commit()
+                    logger.info("Purged all demo/mock speedtest records from SQLite.")
         except Exception as e:
             logger.warning(f"Error purging mock data: {e}")
 

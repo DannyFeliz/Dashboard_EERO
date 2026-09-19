@@ -6,7 +6,7 @@
 document.addEventListener('alpine:init', () => {
   Alpine.data('eeroApp', () => ({
     // App Version
-    appVersion: '1.4.01',
+    appVersion: '1.4.02',
 
     // Windows 11 Dual Theme Engine State
     currentTheme: localStorage.getItem('eero_theme') || 'system',
@@ -193,17 +193,17 @@ document.addEventListener('alpine:init', () => {
     // Changelog Modal State
     showChangelogModal: false,
     changelogContent: '',
-    changelogVersion: '1.4.01',
+    changelogVersion: '1.4.02',
     changelogLoading: false,
 
     // About Modal State
     showAboutModal: false,
 
-    // Auto-Update State (v1.4.01)
+    // Auto-Update State (v1.4.02)
     updateInfo: {
       update_available: false,
-      current_version: '1.4.01',
-      latest_version: '1.4.01',
+      current_version: '1.4.02',
+      latest_version: '1.4.02',
       release_title: '',
       release_notes: '',
       docker_socket_available: false,
@@ -2707,7 +2707,7 @@ document.addEventListener('alpine:init', () => {
         const res = await fetch(`/api/manual/changelog?lang=${this.currentLanguage || 'en'}`);
         const json = await res.json();
         if (json.status === 'success' && json.content) {
-          this.changelogVersion = json.version || '1.4.01';
+          this.changelogVersion = json.version || '1.4.02';
           this.changelogContent = this.renderSimpleMarkdown(json.content);
         }
       } catch (err) {

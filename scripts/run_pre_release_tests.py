@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pre-Release Automated Test Suite - eero Custom Dashboard (v1.4.01)
+Pre-Release Automated Test Suite - eero Custom Dashboard (v1.4.02)
 ==================================================================
 Covers:
   1. Authentication & Demo Mode toggle with session token preservation
@@ -775,7 +775,7 @@ async def run_all_tests():
         runner.assert_true(check_res.status_code == 200, "Endpoint GET /api/system/update/check risponde HTTP 200")
         check_data = check_res.json()
         runner.assert_true(check_data.get("status") == "success", "Stato update check è 'success'")
-        runner.assert_true(check_data.get("current_version") == "1.4.01", f"Versione corrente rilevata è 1.4.01 (ottenuta: {check_data.get('current_version')})")
+        runner.assert_true(check_data.get("current_version") == "1.4.02", f"Versione corrente rilevata è 1.4.02 (ottenuta: {check_data.get('current_version')})")
         runner.assert_true("cli_command" in check_data, "Comando CLI assistito presente nel payload di update")
 
         # 2. Test Endpoint /api/system/update/trigger (modalità manuale/assistita in test env)
@@ -1053,7 +1053,7 @@ async def run_all_tests():
             res_eeros = await eero_client.get_eeros()
             runner.assert_true(len(res_eeros) == 1 and res_eeros[0].get("name") == "Living Room", "get_eeros() preserva l'ultimo stato noto senza ricadere nei nodi demo")
 
-            # 2. Verifica purge_all_mock_data() su SQLite
+            # 2. Verifica purge_all_mock_data() su SQLite (sia in init_db sia standalone)
             sp_mock_id = await db_service.save_speedtest(
                 download_mbps=912.45,
                 upload_mbps=298.10,
@@ -1069,15 +1069,28 @@ async def run_all_tests():
                 source="eero_gateway"
             )
 
-            # Esecuzione pulizia
-            await db_service.purge_all_mock_data()
+            # Esecuzione pulizia durante init_db() (verifica assenza 'database is locked')
+            await db_service.init_db()
 
             # Verifichiamo che il record TIM sia stato eliminato e il record Virgin Media sia preservato
             all_sp = await db_service.get_speedtests(limit=50)
             mock_found = any(s.get("id") == sp_mock_id or abs(float(s.get("download_mbps", 0)) - 912.45) < 0.01 for s in all_sp)
             real_found = any(s.get("id") == sp_real_id for s in all_sp)
-            runner.assert_true(not mock_found, "Record mock TIM 912.45/298.10 eliminato dal database SQLite da purge_all_mock_data()")
+            runner.assert_true(not mock_found, "Record mock TIM eliminato da init_db() senza deadlock SQLite")
             runner.assert_true(real_found, "Record reale utente preservato intatto nel database SQLite")
+
+            # Verifica chiamata standalone di purge_all_mock_data()
+            await db_service.save_speedtest(
+                download_mbps=912.45,
+                upload_mbps=298.10,
+                ping_ms=9.2,
+                server_name="TIM FTTH 1Gbps / 300Mbps (WAN SpeedTest)",
+                source="eero_gateway"
+            )
+            await db_service.purge_all_mock_data()
+            all_sp_standalone = await db_service.get_speedtests(limit=50)
+            mock_found_standalone = any(abs(float(s.get("download_mbps", 0)) - 912.45) < 0.01 for s in all_sp_standalone)
+            runner.assert_true(not mock_found_standalone, "Record mock eliminato anche da chiamata standalone purge_all_mock_data()")
 
             # 3. Verifica che speedtest_service fallisca in modo pulito senza salvare fallback sintetici
             eero_client.current_network_id = "invalid_network_test_id"

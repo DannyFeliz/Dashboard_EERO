@@ -365,6 +365,11 @@ CHANGELOG_SUMMARY_IT = """# Changelog - Sommario Versioni
 
 Di seguito sono riassunti i titoli principali delle release. Il registro completo con tutti i dettagli tecnici è consultabile su GitHub.
 
+## v1.4.02
+* **Fix Lock SQLite all'Avvio durante la Pulizia dei Dati Mock Speedtest (Issue #35)**
+
+---
+
 ## v1.4.01
 * **Fix Risoluzione Accurata Primary Gateway con Nodi PoE e Mesh Misti (Issue #26)**
 * **Risoluzione Server DNS Personalizzati & Rimozione Fallback IP Sviluppatore (Issue #30)**
@@ -490,6 +495,11 @@ Di seguito sono riassunti i titoli principali delle release. Il registro complet
 CHANGELOG_SUMMARY_EN = """# Changelog - Release Summary
 
 Below is a summary of the main release highlights. The complete changelog with all technical details is available on GitHub.
+
+## v1.4.02
+* **Fix SQLite Lock on Startup during Mock Speedtest Data Purge (Issue #35)**
+
+---
 
 ## v1.4.01
 * **Fix Primary Gateway Resolution with PoE & Mixed Mesh Nodes (Issue #26)**

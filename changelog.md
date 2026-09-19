@@ -4,6 +4,17 @@ Tutte le modifiche rilevanti, i miglioramenti e le correzioni di bug apportate a
 
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderisce al versionamento semantico.
 
+## [1.4.02] - 2026-09-19
+
+### ⚡ Fix Lock SQLite all'Avvio durante la Pulizia dei Dati Mock Speedtest (Issue #35)
+* **⚡ Risoluzione Errore `database is locked` in fase di Inizializzazione Schema:**
+  * Risolta la segnalazione [Issue #35](https://github.com/EnricoFlammini/Dashboard_EERO/issues/35) per cui all'avvio del container la routine `purge_all_mock_data()` in `db.py` falliva con eccezione `OperationalError: database is locked`, impedendo la cancellazione automatica dei record orfani TIM FTTH (`912.45 Mbps / 298.10 Mbps`) dal database SQLite `metrics.db`.
+  * **Riutilizzo Connessione Attiva in `init_db`:** Aggiornato il metodo `purge_all_mock_data(conn=db)` per consentire l'esecuzione delle query di pulizia direttamente all'interno della transazione di inizializzazione dello schema, evitando l'apertura di una seconda connessione concorrente e finalizzando tutte le operazioni in un unico `await db.commit()` atomico.
+  * **Mantenimento Modalità Standalone:** La routine preserva la gestione con connessione autonoma e commit dedicato quando invocata al di fuori di `init_db()` (es. script o manutenzione).
+  * **Copertura Test Estesa:** Aggiunto caso di test dedicato in `scripts/run_pre_release_tests.py` che verifica l'assenza di lock SQLite durante l'esecuzione di `init_db()` in presenza di record mock residui.
+
+---
+
 ## [1.4.01] - 2026-09-17 (v1.4.1)
 
 ### 🌐 Risoluzione Accurata Primary Gateway & Correzione Nodi PoE (Issue #26)

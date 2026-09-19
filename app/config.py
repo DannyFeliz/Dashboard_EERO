@@ -7,7 +7,7 @@ try:
     class Settings(BaseSettings):
         """Application settings with environment variable fallbacks."""
         app_name: str = "eero Custom Dashboard & Management Suite"
-        app_version: str = "1.4.01"
+        app_version: str = "1.4.02"
         debug: bool = False
         
         # Path configuration
@@ -60,7 +60,7 @@ except ImportError:
     class Settings:
         def __init__(self):
             self.app_name = "eero Custom Dashboard & Management Suite"
-            self.app_version = "1.4.01"
+            self.app_version = "1.4.02"
             self.debug = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
             self.data_dir = os.getenv("DATA_DIR", "./data")
             self.poll_interval = int(os.getenv("POLL_INTERVAL", "30"))
