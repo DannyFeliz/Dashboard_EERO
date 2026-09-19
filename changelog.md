@@ -40,6 +40,10 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
     * Corretto il bug in `_normalize_device` che sovrascriveva e azzerava i contatori `rx_bytes`, `tx_bytes`, `download_rate_mbps` e `upload_rate_mbps` quando assenti a radice del payload o derivati da `usage`.
     * Introdotto arricchimento periodico via endpoint cloud `/networks/{id}/data_usage/devices` (con cache a 5 min e backoff intelligente) per reti con abbonamento eero Plus attivo.
     * Sostituita la visualizzazione fuorviante `↓ 0 B / ↑ 0 B` con l'indicatore dedicato `↓ — / ↑ — (Cablato)` dotato di tooltip esplicativo sulla natura dello switching Layer 2 hardware degli apparati eero (i contatori pacchetti hardware nativi sono esposti dal kernel eero solo per le stazioni Wi-Fi).
+  * **Trasparenza Stima Consumi & Resilienza Reset Hardware (v1.5.0):**
+    * **Algoritmo Delta Resiliente a Standby e Roaming (`db.py`):** Risolto il problema di azzeramento o perdita dei volumi scaricati quando un client va in standby, sospensione o cambia nodo mesh (eventi che resettano a zero i contatori fisici Wi-Fi dell'eero). Ora la funzione `get_device_usage_history` calcola l'accumulo iterativo rilevando automaticamente i reset e sommando i volumi prima e dopo l'interruzione.
+    * **Pulsanti di Aiuto Contestuale `?` e Badge "Dati Stimati":** Aggiunti badge e pulsanti `?` dedicati accanto a tutti i contatori numerici (Download Totale, Upload Totale, Traffico Combinato e colonna Traffico nella tabella principale).
+    * **Modale Informativo Trasparenza Calcolo:** Popover integrato che spiega chiaramente come viene stimata la telemetria senza abbonamento eero Plus (conteggio pacchetti Wi-Fi), il comportamento in caso di standby, la compressione del traffico nei download di giochi/file e la differenza tra contatore cumulativo assoluto a vita e delta nel periodo selezionato.
 
 ---
 

@@ -216,6 +216,9 @@ document.addEventListener('alpine:init', () => {
     // About Modal State
     showAboutModal: false,
 
+    // Estimated Data Usage Info Modal State
+    showUsageInfoModal: false,
+
     // Auto-Update State (v1.5.0)
     updateInfo: {
       update_available: false,

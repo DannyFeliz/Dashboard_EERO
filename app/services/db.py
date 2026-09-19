@@ -742,15 +742,33 @@ class DBService:
                 sim_time += step_delta
             points = base_points
 
-        # Calcolo aggregati delta totali per l'intero periodo
-        first_p = points[0]
-        last_p = points[-1]
-        delta_rx = max(0.0, float(last_p["rx_bytes"]) - float(first_p["rx_bytes"]))
-        delta_tx = max(0.0, float(last_p["tx_bytes"]) - float(first_p["tx_bytes"]))
-        total_usage_bytes = delta_rx + delta_tx
+        # Calcolo aggregati delta totali per l'intero periodo gestendo eventuali reset/standby
+        delta_rx = 0.0
+        delta_tx = 0.0
+        for i in range(1, len(points)):
+            p_prev = points[i - 1]
+            p_curr = points[i]
+            rx_prev = float(p_prev.get("rx_bytes") or 0.0)
+            rx_curr = float(p_curr.get("rx_bytes") or 0.0)
+            tx_prev = float(p_prev.get("tx_bytes") or 0.0)
+            tx_curr = float(p_curr.get("tx_bytes") or 0.0)
 
-        rx_val = delta_rx if delta_rx > 0 else float(last_p["rx_bytes"])
-        tx_val = delta_tx if delta_tx > 0 else float(last_p["tx_bytes"])
+            if rx_curr >= rx_prev:
+                delta_rx += (rx_curr - rx_prev)
+            else:
+                # Reset rilevato (es. standby del PC, disconnessione o cambio antenna eero)
+                delta_rx += rx_curr
+
+            if tx_curr >= tx_prev:
+                delta_tx += (tx_curr - tx_prev)
+            else:
+                delta_tx += tx_curr
+
+        total_usage_bytes = delta_rx + delta_tx
+        last_p = points[-1]
+
+        rx_val = delta_rx if delta_rx > 0 else float(last_p.get("rx_bytes") or 0.0)
+        tx_val = delta_tx if delta_tx > 0 else float(last_p.get("tx_bytes") or 0.0)
         tot_val = total_usage_bytes if total_usage_bytes > 0 else (rx_val + tx_val)
 
         # Parsing temporale dei campioni

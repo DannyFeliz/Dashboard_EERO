@@ -134,10 +134,12 @@ Quando l'utente attiva la **Modalità Demo**, il token Live reale viene preserva
 ### 4.3 Device Data Usage Insights Suite & Top Bandwidth Hogs (v1.5.0)
 * **Telemetria Consumi per Dispositivo:** Tabella SQLite dedicata `device_usage_history` con indici compositi per MAC e timestamp.
 * **Campionamento Delta Traffico:** Ad ogni ciclo del poller vengono calcolati il delta di byte trasferiti in download e upload e la velocità effettiva di trasferimento in Mbps.
+* **Algoritmo Delta Resiliente a Reset Hardware:** Il calcolo dei consumi di periodo in `db.py` non esegue una banale differenza tra ultimo e primo campione (`last - first`), ma accumula iterativamente gli incrementi e rileva gli azzeramenti dei contatori hardware Wi-Fi (causati da standby, disconnessioni o roaming mesh), evitando la perdita o la sottostima dei dati scaricati.
 * **Tab 4 "Consumo Dati" nel Modale Dispositivo:**
-  * Selettore di intervallo temporale: **Ultime 24h** (campionamento orario), **7 Giorni** (giornaliero), **30 Giorni** (mensile).
-  * KPI aggregati: **Download Totale**, **Upload Totale**, **Traffico Combinato**.
+  * Selettore di intervallo temporale: **Ultime 24h** (campionamento orario/a intervalli), **7 Giorni** (giornaliero), **30 Giorni** (mensile).
+  * KPI aggregati: **Download Totale**, **Upload Totale**, **Traffico Combinato** corredati da pulsanti `?` di approfondimento contestuale e badge esplicativo "Dati Stimati".
   * Grafico temporale interattivo Chart.js con linee per download (blu) e upload (verde smeraldo).
+  * **Modale Trasparenza Calcolo Dati (`showUsageInfoModal`):** Documentazione integrata che illustra la stima dai pacchetti fisici (per reti senza eero Plus), l'effetto della compressione di rete rispetto allo spazio su disco dei giochi/installer, e la differenza tra contatore cumulativo assoluto e delta di periodo.
 * **Widget Dashboard "Top Bandwidth Hogs":** Card nella schermata principale con la classifica dei dispositivi che consumano più dati nella rete, evidenziando i primi 3 classificati (Oro, Argento, Bronzo) e offrendo l'apertura con 1-click del dettaglio dispositivo.
 
 ### 4.4 Windows 11 Fluent Design & Dual-Theme Engine (v1.4.0)
