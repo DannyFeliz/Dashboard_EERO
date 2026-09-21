@@ -29,6 +29,7 @@ try:
         telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
         telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
         webhook_url: str = os.getenv("WEBHOOK_URL", "")
+        dashboard_lang: str = os.getenv("DASHBOARD_LANG", "en")
 
         # Auto-Update & Docker Integration
         docker_socket_path: str = os.getenv("DOCKER_SOCKET_PATH", "/var/run/docker.sock")
@@ -70,6 +71,7 @@ except ImportError:
             self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
             self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
             self.webhook_url = os.getenv("WEBHOOK_URL", "")
+            self.dashboard_lang = os.getenv("DASHBOARD_LANG", "en")
             self.docker_socket_path = os.getenv("DOCKER_SOCKET_PATH", "/var/run/docker.sock")
             self.watchtower_url = os.getenv("WATCHTOWER_URL", "")
             self.update_check_interval_hours = int(os.getenv("UPDATE_CHECK_INTERVAL_HOURS", "6"))

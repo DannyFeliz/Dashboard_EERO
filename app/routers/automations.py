@@ -32,10 +32,19 @@ class NotificationSettingsRequest(BaseModel):
     telegram_chat_id: Optional[str] = None
     webhook_enabled: bool
     webhook_url: Optional[str] = None
+    language: Optional[str] = None
 
 
 class DigestSettingsRequest(BaseModel):
     enabled: bool
+
+
+class DigestGenerateRequest(BaseModel):
+    language: Optional[str] = None
+
+
+class NotificationTestRequest(BaseModel):
+    language: Optional[str] = None
 
 
 class DNSInstanceModel(BaseModel):
@@ -256,17 +265,27 @@ async def update_notification_settings(payload: NotificationSettingsRequest):
         telegram_bot_token=payload.telegram_bot_token,
         telegram_chat_id=payload.telegram_chat_id,
         webhook_enabled=payload.webhook_enabled,
-        webhook_url=payload.webhook_url
+        webhook_url=payload.webhook_url,
+        language=payload.language
     )
     return {"status": "success", "message": "Impostazioni di notifica salvate."}
 
 
 @router.post("/notifications/test")
-async def test_notification_channels():
+async def test_notification_channels(payload: Optional[NotificationTestRequest] = None):
     """Invia un messaggio di prova per verificare che Telegram e Webhook funzionino."""
-    msg = "🔔 <b>Test Notifiche eero Dashboard</b>\n\nConnessione con il server completata con successo!"
+    lang = payload.language if payload else None
+    active_lang = await notification_service.get_language(lang)
+    is_it = (active_lang == "it")
+    if is_it:
+        msg = "🔔 <b>Test Notifiche eero Dashboard</b>\n\nConnessione con il server completata con successo!"
+        wh_msg = "Ping test da eero Dashboard"
+    else:
+        msg = "🔔 <b>eero Dashboard Notification Test</b>\n\nServer connection completed successfully!"
+        wh_msg = "Ping test from eero Dashboard"
+
     tg_res = await notification_service.send_telegram_message(msg, ignore_enabled=True)
-    wh_res = await notification_service.send_webhook("test_ping", {"test": True, "message": "Ping test da eero Dashboard"})
+    wh_res = await notification_service.send_webhook("test_ping", {"test": True, "message": wh_msg})
     
     return {
         "status": "success",
@@ -304,10 +323,11 @@ async def update_digest_settings(payload: DigestSettingsRequest):
 
 
 @router.post("/digest/generate")
-async def generate_immediate_digest():
+async def generate_immediate_digest(payload: Optional[DigestGenerateRequest] = None):
     """Genera e invia immediatamente il report di riepilogo della rete."""
     try:
-        data = await background_poller._send_daily_digest()
+        lang = payload.language if payload else None
+        data = await background_poller._send_daily_digest(lang=lang)
         return {"status": "success", "message": "Report Digest generato e inviato con successo sui canali attivi.", "data": data}
     except Exception as e:
         logger.error(f"Errore generazione digest: {e}")

@@ -345,6 +345,15 @@ document.addEventListener('alpine:init', () => {
       } catch (e) {
         console.warn("Could not load translations for", this.currentLanguage, e);
       }
+      try {
+        await fetch('/api/system/language', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: this.currentLanguage })
+        });
+      } catch (e) {
+        console.warn("Could not sync language with backend:", e);
+      }
       await this.loadManualSections();
       if (this.showChangelogModal) {
         await this.openChangelogModal();
@@ -2284,7 +2293,10 @@ document.addEventListener('alpine:init', () => {
         await fetch('/api/automations/notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.notificationSettings)
+          body: JSON.stringify({
+            ...this.notificationSettings,
+            language: this.currentLanguage
+          })
         });
         const title = this.currentLanguage === 'it' ? "Notifiche Salvate" : "Notifications Saved";
         const msg = this.currentLanguage === 'it' ? "Impostazioni canali di allarme aggiornate." : "Alert channel settings updated.";
@@ -2297,7 +2309,11 @@ document.addEventListener('alpine:init', () => {
 
     async testNotifications() {
       try {
-        const res = await fetch('/api/automations/notifications/test', { method: 'POST' });
+        const res = await fetch('/api/automations/notifications/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: this.currentLanguage })
+        });
         const json = await res.json();
         const title = this.currentLanguage === 'it' ? "Test Inviato" : "Test Sent";
         this.showToast(title, `Telegram: ${json.telegram_sent ? 'OK' : 'No'} | Webhook: ${json.webhook_sent ? 'OK' : 'No'}`, "info");
@@ -2734,7 +2750,11 @@ document.addEventListener('alpine:init', () => {
 
     async triggerDigest() {
       try {
-        const res = await fetch('/api/automations/digest/generate', { method: 'POST' });
+        const res = await fetch('/api/automations/digest/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: this.currentLanguage })
+        });
         const json = await res.json();
         if (res.ok && json.status === 'success') {
           const title = this.currentLanguage === 'it' ? "Digest Inviato" : "Digest Sent";

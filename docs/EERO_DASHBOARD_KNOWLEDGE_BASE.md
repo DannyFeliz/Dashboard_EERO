@@ -374,12 +374,22 @@ Tutti gli endpoint rispondono in formato JSON con intestazione `application/json
 | `DOCKER_SOCKET_PATH` | `/var/run/docker.sock` | Percorso socket Docker per consentire l'auto-update in-app |
 | `WATCHTOWER_URL` | `""` | URL opzionale webhook Watchtower per triggerare il pull dell'immagine |
 | `UPDATE_CHECK_INTERVAL_HOURS`| `6` | Frequenza controllo nuove versioni su Docker Hub (ore) |
+| `DASHBOARD_LANG` | `"en"` | Lingua predefinita della dashboard e delle notifiche Telegram (`"en"` o `"it"`) |
 
 ---
 
 ## 8. Storico Bug Risolti, Cause Radice (RCA) & Issue di Riferimento
 
 Questa sezione documenta le cause radice dei bug riscontrati durante lo sviluppo e la relativa soluzione architetturale.
+
+### Issue #38 — Telegram Daily Digest & Controls Tab Localization
+* **Sintomo:** Il report giornaliero inviato su Telegram (Daily Digest) risultava sempre in italiano anche quando l'interfaccia utente era impostata in inglese (`currentLanguage: 'en'`). Inoltre, nella scheda *Controlli & QR Ospiti* erano presenti testi fissi in italiano (descrizione notifiche Telegram, card *Aggiornamenti Container & Manutenzione Docker*, e dettagli di stato del DNS Synchronizer).
+* **Causa Radice:** In `NotificationService` i messaggi formattati per Telegram (`notify_digest`, `notify_new_device`, `notify_node_offline`) erano scritti direttamente in italiano senza supporto multilingua e il backend non disponeva di alcuna sincronizzazione o persistenza della lingua selezionata dal client. Nell'HTML, vari elementi della scheda Controlli non utilizzavano i binding reattivi `x-text="t(...)"`.
+* **Risoluzione:**
+  * Implementati gli endpoint `GET /api/system/language` e `POST /api/system/language` e salvataggio della chiave `system_language` in SQLite (`metrics.db`).
+  * In `app.js`, `setLanguage()` propaga la lingua selezionata al backend, sincronizzando automaticamente le schedulazioni notturne del digest (ore 21:00).
+  * `NotificationService` adatta dinamicamente testi e titoli in inglese o italiano in base alla lingua salvata (o al parametro opzionale `language` passato via API).
+  * Aggiunte le chiavi mancanti in `it.json` ed `en.json` (`controls.notifications_desc`, `controls.docker_*`, `controls.dns_*`) e aggiornati i tag in `index.html`.
 
 ### Issue #22 — Multi-Network Fleet Management
 * **Sintomo:** Utenti con più reti mesh eero sul proprio account (es. casa e ufficio) non potevano visualizzare né gestire la seconda rete; la dashboard restava vincolata a `networks[0]`.

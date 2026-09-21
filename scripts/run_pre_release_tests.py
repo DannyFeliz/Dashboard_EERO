@@ -1365,7 +1365,126 @@ async def run_all_tests():
         exp_invalid = await client.get("/api/analytics/export/unknown_dataset?format=csv")
         runner.assert_true(exp_invalid.status_code == 400, "Richiesta esportazione dataset non valido restituisce HTTP 400")
 
-    runner.print_summary()
+        print("\n🌐 [19/19] TEST LOCALIZZAZIONE MULTILINGUA & DAILY DIGEST EN/IT (Issue #38)")
+        # 1. API System Language GET / POST
+        lang_get = await client.get("/api/system/language")
+        runner.assert_true(lang_get.status_code == 200, "GET /api/system/language risponde HTTP 200")
+        runner.assert_true(lang_get.json().get("status") == "success", "GET /api/system/language restituisce status success")
+
+        # Rifiuta lingua non supportata
+        lang_invalid = await client.post("/api/system/language", json={"language": "de"})
+        runner.assert_true(lang_invalid.status_code == 400, "POST /api/system/language con lingua non supportata risponde HTTP 400")
+
+        # Imposta lingua italiana
+        lang_set_it = await client.post("/api/system/language", json={"language": "it"})
+        runner.assert_true(lang_set_it.status_code == 200, "POST /api/system/language 'it' risponde HTTP 200")
+        runner.assert_true(lang_set_it.json().get("language") == "it", "Lingua impostata a 'it'")
+
+        lang_check_it = await client.get("/api/system/language")
+        runner.assert_true(lang_check_it.json().get("language") == "it", "GET /api/system/language conferma 'it'")
+
+        # Imposta lingua inglese
+        lang_set_en = await client.post("/api/system/language", json={"language": "en"})
+        runner.assert_true(lang_set_en.status_code == 200, "POST /api/system/language 'en' risponde HTTP 200")
+        runner.assert_true(lang_set_en.json().get("language") == "en", "Lingua impostata a 'en'")
+
+        # 2. Test Daily Digest con localizzazione (EN vs IT)
+        from app.services.notifications import notification_service
+        sample_digest = {
+            "network_name": "Home Test Mesh",
+            "health_score": 98,
+            "isp": "Fiber ISP",
+            "active_devices_count": 12,
+            "count_6ghz": 2,
+            "count_5ghz": 6,
+            "count_24ghz": 3,
+            "count_wired": 1,
+            "online_nodes": 3,
+            "total_nodes": 3,
+            "wan_down": 850.0,
+            "wan_up": 320.0,
+            "wan_ping": 11.5,
+        }
+
+        # Invio digest in Inglese
+        await notification_service.notify_digest(sample_digest, lang="en")
+        alerts_en = await db_service.get_alerts(limit=1)
+        runner.assert_true(len(alerts_en) > 0, "Alert salvato su DB per digest EN")
+        runner.assert_true(alerts_en[0].get("title") == "📊 eero Mesh Daily Digest", "Titolo Digest in Inglese corretto (Issue #38)")
+        runner.assert_true("Daily digest report sent" in alerts_en[0].get("message", ""), "Messaggio Digest in Inglese corretto")
+
+        # Invio digest in Italiano
+        await notification_service.notify_digest(sample_digest, lang="it")
+        alerts_it = await db_service.get_alerts(limit=1)
+        runner.assert_true(alerts_it[0].get("title") == "📊 Riepilogo Giornaliero eero Mesh", "Titolo Digest in Italiano corretto")
+        runner.assert_true("Report giornaliero inviato" in alerts_it[0].get("message", ""), "Messaggio Digest in Italiano corretto")
+
+        # Test trigger digest via API con override language
+        res_dig_en = await client.post("/api/automations/digest/generate", json={"language": "en"})
+        runner.assert_true(res_dig_en.status_code == 200, "POST /api/automations/digest/generate con language='en' risponde HTTP 200")
+        alerts_api_en = await db_service.get_alerts(limit=1)
+        runner.assert_true(alerts_api_en[0].get("title") == "📊 eero Mesh Daily Digest", "API digest genera titolo EN con language='en'")
+
+        # 3. Test Allarme Nuovo Dispositivo (EN vs IT)
+        sample_dev = {
+            "hostname": "Test-Laptop",
+            "mac": "AA:BB:CC:11:22:33",
+            "ip": "192.168.4.99",
+            "wireless_band": "5 GHz",
+            "connected_eero_name": "Living Room"
+        }
+        await notification_service.notify_new_device(sample_dev, lang="en")
+        alert_dev_en = (await db_service.get_alerts(limit=1))[0]
+        runner.assert_true(alert_dev_en.get("title") == "🚨 New Device Detected on eero Network!", "Titolo nuovo device in Inglese corretto")
+        runner.assert_true("connected to node" in alert_dev_en.get("message", ""), "Messaggio nuovo device in Inglese corretto")
+
+        await notification_service.notify_new_device(sample_dev, lang="it")
+        alert_dev_it = (await db_service.get_alerts(limit=1))[0]
+        runner.assert_true(alert_dev_it.get("title") == "🚨 Nuovo Dispositivo Rilevato nella Rete eero!", "Titolo nuovo device in Italiano corretto")
+        runner.assert_true("collegato al nodo" in alert_dev_it.get("message", ""), "Messaggio nuovo device in Italiano corretto")
+
+        # 4. Test Allarme Nodo Offline (EN vs IT)
+        sample_node = {"name": "Studio eero", "ip": "192.168.4.2"}
+        await notification_service.notify_node_offline(sample_node, lang="en")
+        alert_node_en = (await db_service.get_alerts(limit=1))[0]
+        runner.assert_true(alert_node_en.get("title") == "⚠️ eero Mesh Node Offline!", "Titolo nodo offline in Inglese corretto")
+
+        await notification_service.notify_node_offline(sample_node, lang="it")
+        alert_node_it = (await db_service.get_alerts(limit=1))[0]
+        runner.assert_true(alert_node_it.get("title") == "⚠️ Nodo eero Mesh Offline!", "Titolo nodo offline in Italiano corretto")
+
+        # 5. Test Endpoint Notifiche / Test con language
+        res_notif_en = await client.post("/api/automations/notifications/test", json={"language": "en"})
+        runner.assert_true(res_notif_en.status_code == 200, "POST /api/automations/notifications/test con language='en' risponde HTTP 200")
+        runner.assert_true(res_notif_en.json().get("telegram_sent") is True, "Test notifica Telegram EN inviato")
+
+        # 6. Verifica integrità dizionari JSON (it.json ed en.json)
+        import json
+        with open("app/static/locales/it.json", "r", encoding="utf-8") as f:
+            it_dict = json.load(f)
+        with open("app/static/locales/en.json", "r", encoding="utf-8") as f:
+            en_dict = json.load(f)
+
+        required_keys = [
+            "notifications_desc",
+            "docker_title",
+            "docker_subtitle",
+            "docker_btn_update_available",
+            "docker_btn_check",
+            "docker_installed_version",
+            "docker_socket_status",
+            "docker_socket_detected",
+            "docker_socket_not_mounted",
+            "docker_latest_release",
+            "dns_last_sync_prefix",
+            "dns_never_synced",
+            "dns_password_unchanged",
+        ]
+        for k in required_keys:
+            runner.assert_true(k in it_dict.get("controls", {}), f"Chiave controls.{k} presente in it.json")
+            runner.assert_true(k in en_dict.get("controls", {}), f"Chiave controls.{k} presente in en.json")
+
+        runner.print_summary()
 
 
 

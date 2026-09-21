@@ -6,6 +6,23 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/)
 
 ## [1.5.0] - 2026-09-19
 
+### 🌐 Localizzazione Multilingua Daily Digest Telegram & Scheda Controlli (Issue #38)
+* **🌐 Supporto Bilingue Completo (EN & IT) per Notifiche & Daily Digest Telegram:**
+  * Risolta la segnalazione [Issue #38](https://github.com/EnricoFlammini/Dashboard_EERO/issues/38) (`stevehoek`): il report giornaliero di riepilogo inviato su Telegram veniva generato e formattato esclusivamente in italiano anche quando l'utente aveva impostato la dashboard in lingua inglese.
+  * **Sincronizzazione Lingua Utente tra Frontend e Backend:**
+    * Nuovi endpoint REST `GET /api/system/language` e `POST /api/system/language` per memorizzare e sincronizzare in modo persistente su SQLite la preferenza linguistica dell'utente (`en` o `it`).
+    * Quando l'utente seleziona la lingua dal menù a tendina nell'header, la modifica viene propagata istantaneamente al backend.
+    * Variabile d'ambiente configurabile `DASHBOARD_LANG` (default: `en`).
+  * **Notifiche Telegram & Allarmi Bilingue:**
+    * **Daily Digest:** Titoli, etichette di rete, frequenze Wi-Fi (es. *6 GHz: 2 | 5 GHz: 4 | Wired: 1* vs *Cablati: 1*), nodi operativi e stato speedtest formattati accuratamente nella lingua scelta dall'utente.
+    * **Intruder Alert / Nuovo Dispositivo:** Messaggi e titoli generati in italiano o inglese (*"🚨 New Device Detected on eero Network!"* vs *"🚨 Nuovo Dispositivo Rilevato nella Rete eero!"*).
+    * **Nodo Mesh Offline:** Titolo e corpo del messaggio localizzati.
+    * **Test Notifiche:** Messaggio di test coerente con la lingua attiva.
+* **🌐 Traduzione Stringhe Mancanti nella Scheda Controlli & QR Ospiti:**
+  * Sostituita la descrizione hardcoded in italiano della card Telegram con la chiave reattiva `controls.notifications_desc` (*"Instant alerts on disconnections and new clients"* / *"Avvisi immediati su disconnessioni e nuovi client"*).
+  * Tradotta integralmente la card **Aggiornamenti Container & Manutenzione Docker** (`controls.docker_*`): titolo, sottotitolo, etichette versione installata, stato socket Docker (*"🟢 /var/run/docker.sock Detected"* vs *"⚪ Not mounted (CLI Mode)"*), ultima release e pulsanti di aggiornamento con 1 clic.
+  * Localizzate le etichette di sincronizzazione e i placeholder della sezione **Multi-Engine DNS Synchronizer** (`controls.dns_last_sync_prefix`, `controls.dns_never_synced`, `controls.dns_server_name_placeholder`, `controls.dns_password_unchanged`).
+
 ### 🌐 Correzione Riconciliazione Primary Gateway in Topologie Multi-Ethernet (Issue #36)
 * **🌐 Elezione Deterministica del Primary Gateway su Switch e Reti Cablate:**
   * Risolta la segnalazione [Issue #36](https://github.com/EnricoFlammini/Dashboard_EERO/issues/36) (`jpatchMC`) relativa all'errata identificazione del nodo Gateway primario in topologie dove più nodi eero secondari (leaf) sono collegati via Ethernet tramite switch.

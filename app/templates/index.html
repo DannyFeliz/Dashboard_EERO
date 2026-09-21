@@ -1987,7 +1987,7 @@
                       <input 
                         type="text" 
                         x-model="inst.name" 
-                        placeholder="Nome Server"
+                        :placeholder="t('controls.dns_server_name_placeholder') || 'Nome Server'"
                         class="glass-input px-2 py-0.5 rounded text-xs font-semibold flex-1 min-w-0">
                     </div>
 
@@ -2034,7 +2034,7 @@
                         </div>
                         <div>
                           <label class="block text-slate-600 dark:text-slate-400 mb-0.5 text-[11px]" x-text="t('controls.dns_password') || 'Password:'"></label>
-                          <input type="password" x-model="inst.password" :placeholder="inst.has_password ? '•••••••••••• (Invariata)' : 'Password AdGuard'" class="glass-input w-full px-2.5 py-1.5 rounded-lg font-mono text-xs">
+                          <input type="password" x-model="inst.password" :placeholder="inst.has_password ? (t('controls.dns_password_unchanged') || '•••••••••••• (Invariata)') : 'Password AdGuard'" class="glass-input w-full px-2.5 py-1.5 rounded-lg font-mono text-xs">
                         </div>
                       </div>
                     </template>
@@ -2044,7 +2044,7 @@
                       <div class="sm:col-span-12 grid grid-cols-1 sm:grid-cols-12 gap-2">
                         <div class="sm:col-span-8">
                           <label class="block text-slate-600 dark:text-slate-400 mb-0.5 text-[11px]" x-text="t('controls.dns_token') || 'API Token / WebPassword:'"></label>
-                          <input type="password" x-model="inst.token" :placeholder="inst.has_password ? '•••••••••••• (Invariato)' : 'Token WEBPASSWORD / Session SID'" class="glass-input w-full px-2.5 py-1.5 rounded-lg font-mono text-xs">
+                          <input type="password" x-model="inst.token" :placeholder="inst.has_password ? (t('controls.dns_password_unchanged') || '•••••••••••• (Invariato)') : 'Token WEBPASSWORD / Session SID'" class="glass-input w-full px-2.5 py-1.5 rounded-lg font-mono text-xs">
                         </div>
                         <div class="sm:col-span-4">
                           <label class="block text-slate-600 dark:text-slate-400 mb-0.5 text-[11px]" x-text="t('controls.dns_zone') || 'Zona (es. lan):'"></label>
@@ -2062,7 +2062,7 @@
                         </div>
                         <div class="sm:col-span-4">
                           <label class="block text-slate-600 dark:text-slate-400 mb-0.5 text-[11px]" x-text="t('controls.dns_token') || 'API Token / Password:'"></label>
-                          <input type="password" x-model="inst.token" :placeholder="inst.has_password ? '•••••••••••• (Invariato)' : 'Token API o Password'" class="glass-input w-full px-2.5 py-1.5 rounded-lg font-mono text-xs">
+                          <input type="password" x-model="inst.token" :placeholder="inst.has_password ? (t('controls.dns_password_unchanged') || '•••••••••••• (Invariato)') : 'Token API o Password'" class="glass-input w-full px-2.5 py-1.5 rounded-lg font-mono text-xs">
                         </div>
                         <div class="sm:col-span-4">
                           <label class="block text-slate-600 dark:text-slate-400 mb-0.5 text-[11px]" x-text="t('controls.dns_zone') || 'Zona PTR (es. lan):'"></label>
@@ -2088,7 +2088,7 @@
                   <div class="pt-2 border-t border-black/[0.04] dark:border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                     <div class="text-slate-600 dark:text-slate-400 flex items-center space-x-1.5">
                       <span class="w-1.5 h-1.5 rounded-full" :class="inst.last_sync_time ? 'bg-emerald-500' : 'bg-slate-400'"></span>
-                      <span x-text="inst.last_sync_time ? ('Ultimo sync: ' + formatLocalDateTime(inst.last_sync_time, true)) : 'Mai sincronizzato'"></span>
+                      <span x-text="inst.last_sync_time ? ((t('controls.dns_last_sync_prefix') || 'Ultimo sync: ') + formatLocalDateTime(inst.last_sync_time, true)) : (t('controls.dns_never_synced') || 'Mai sincronizzato')"></span>
                       <template x-if="inst.last_sync_count > 0">
                         <span class="font-mono text-[10px] px-1.5 py-0.2 rounded bg-black/[0.05] dark:bg-white/[0.05]" x-text="inst.last_sync_count + ' host'"></span>
                       </template>
@@ -2149,7 +2149,7 @@
                 </div>
                 <div>
                   <h3 class="text-base font-bold text-slate-900 dark:text-white leading-tight" x-text="t('controls.notifications_title')"></h3>
-                  <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Avvisi immediati su disconnessioni e nuovi client</p>
+                  <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5" x-text="t('controls.notifications_desc')"></p>
                 </div>
               </div>
               <button @click="testNotifications()" class="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/20 dark:hover:bg-indigo-500/30 dark:text-indigo-300 dark:border-indigo-500/30 text-xs font-semibold transition cursor-pointer" x-text="t('controls.send_test')">
@@ -2230,10 +2230,10 @@
               </div>
               <div>
                 <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
-                  <span>Aggiornamenti Container & Manutenzione Docker</span>
+                  <span x-text="t('controls.docker_title')"></span>
                   <span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-300 dark:border-sky-500/20 font-bold" x-text="'v' + appVersion"></span>
                 </h3>
-                <p class="text-xs text-slate-600 dark:text-slate-400">Verifica automatica release su Docker Hub e aggiornamento a 1-clic</p>
+                <p class="text-xs text-slate-600 dark:text-slate-400" x-text="t('controls.docker_subtitle')"></p>
               </div>
             </div>
 
@@ -2241,21 +2241,21 @@
               @click="openUpdateModal(true)" 
               class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition flex items-center space-x-2 cursor-pointer active:scale-95">
               <span>🚀</span>
-              <span x-text="updateInfo && updateInfo.update_available ? 'Aggiornamento Disponibile (1-Clic)' : 'Verifica Nuove Versioni / Aggiorna'"></span>
+              <span x-text="updateInfo && updateInfo.update_available ? t('controls.docker_btn_update_available') : t('controls.docker_btn_check')"></span>
             </button>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <div class="p-3 rounded-xl bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none">
-              <span class="text-slate-600 dark:text-slate-500 block text-[11px] font-medium">Versione Installata</span>
+              <span class="text-slate-600 dark:text-slate-500 block text-[11px] font-medium" x-text="t('controls.docker_installed_version')"></span>
               <span class="font-bold text-slate-900 dark:text-white font-mono" x-text="'v' + appVersion"></span>
             </div>
             <div class="p-3 rounded-xl bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none">
-              <span class="text-slate-600 dark:text-slate-500 block text-[11px] font-medium">Stato Docker Socket</span>
-              <span class="font-bold font-mono" :class="updateInfo.docker_socket_available ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'" x-text="updateInfo.docker_socket_available ? '🟢 /var/run/docker.sock Rilevato' : '⚪ Non montato (Modalità CLI)'"></span>
+              <span class="text-slate-600 dark:text-slate-500 block text-[11px] font-medium" x-text="t('controls.docker_socket_status')"></span>
+              <span class="font-bold font-mono" :class="updateInfo.docker_socket_available ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'" x-text="updateInfo.docker_socket_available ? t('controls.docker_socket_detected') : t('controls.docker_socket_not_mounted')"></span>
             </div>
             <div class="p-3 rounded-xl bg-white/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none">
-              <span class="text-slate-600 dark:text-slate-500 block text-[11px] font-medium">Ultima Release Rilevata</span>
+              <span class="text-slate-600 dark:text-slate-500 block text-[11px] font-medium" x-text="t('controls.docker_latest_release')"></span>
               <span class="font-bold text-amber-600 dark:text-amber-400 font-mono" x-text="updateInfo.latest_version ? 'v' + updateInfo.latest_version : '---'"></span>
             </div>
           </div>

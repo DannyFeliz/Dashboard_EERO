@@ -974,7 +974,7 @@ class BackgroundPoller:
             self._last_adguard_sync = now
             asyncio.create_task(adguard_service.auto_sync_if_enabled(self.cached_devices))
 
-    async def _send_daily_digest(self) -> Dict[str, Any]:
+    async def _send_daily_digest(self, lang: Optional[str] = None) -> Dict[str, Any]:
         try:
             stats = await db_service.get_speedtest_stats()
             
@@ -1017,7 +1017,7 @@ class BackgroundPoller:
                 "wan_ping": wan_ping,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-            await notification_service.notify_digest(digest_payload)
+            await notification_service.notify_digest(digest_payload, lang=lang)
             return digest_payload
         except Exception as e:
             logger.error(f"Errore invio digest giornaliero: {e}", exc_info=True)
