@@ -9,7 +9,10 @@ const context = {
   localStorage: { getItem: () => null, setItem: () => {} },
   document: { addEventListener: (_event, callback) => callback() },
   Alpine: { data: (_name, componentFactory) => { factory = componentFactory; } },
-  window: { location: { pathname: '/devices', search: '' } },
+  window: {
+    location: { pathname: '/devices', search: '' },
+    matchMedia: () => ({ matches: false, addEventListener: () => {} })
+  },
   setTimeout,
   clearTimeout,
   setInterval,
