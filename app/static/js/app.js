@@ -75,6 +75,53 @@ document.addEventListener('alpine:init', () => {
     showConnectedOnly: false,
     deviceSortField: 'name',
     deviceSortDirection: 'asc',
+    openDeviceDropdown: null,
+    toggleDeviceDropdown(name) {
+      this.openDeviceDropdown = this.openDeviceDropdown === name ? null : name;
+    },
+    closeDeviceDropdowns() {
+      this.openDeviceDropdown = null;
+    },
+    getBandFilterLabel() {
+      const map = {
+        all: this.t('devices.filter_all_bands'),
+        '6GHz': this.t('devices.filter_band_6ghz'),
+        '5GHz': this.t('devices.filter_band_5ghz'),
+        '2.4GHz': this.t('devices.filter_band_24ghz'),
+        wired: this.t('devices.filter_band_wired')
+      };
+      return map[this.selectedBandFilter] || this.t('devices.filter_all_bands');
+    },
+    getNodeFilterLabel() {
+      if (this.selectedNodeFilter === 'all') return this.t('devices.filter_all_nodes');
+      const node = (this.eeros || []).find(e => (e.id || e.serial) === this.selectedNodeFilter);
+      return node ? node.name : this.t('devices.filter_all_nodes');
+    },
+    getCategoryFilterLabel() {
+      if (this.selectedCategoryFilter === 'all') return this.t('devices.filter_all_categories');
+      if (this.selectedCategoryFilter === 'favorites') return this.t('devices.filter_favorites');
+      const map = {
+        Computer: this.t('devices.cat_computer'),
+        Mobile: this.t('devices.cat_mobile'),
+        'Smart Home': this.t('devices.cat_smarthome'),
+        Intrattenimento: this.t('devices.cat_entertainment'),
+        Gaming: this.t('devices.cat_gaming'),
+        'Server/Rete': this.t('devices.cat_server'),
+        Altro: this.t('devices.cat_other')
+      };
+      return map[this.selectedCategoryFilter] || this.selectedCategoryFilter;
+    },
+    getProfileFilterLabel() {
+      if (this.selectedProfileFilter === 'all') return this.t('devices.filter_all_profiles');
+      if (this.selectedProfileFilter === 'unassigned') return this.t('devices.filter_unassigned');
+      const prof = (this.profiles || []).find(p => p.id === this.selectedProfileFilter);
+      return prof ? ('👤 ' + prof.name) : this.t('devices.filter_all_profiles');
+    },
+    getIpTypeFilterLabel() {
+      if (this.selectedIpTypeFilter === 'static') return this.t('devices.filter_only_static');
+      if (this.selectedIpTypeFilter === 'dhcp') return this.t('devices.filter_only_dhcp');
+      return this.t('devices.filter_all_assignments');
+    },
 
 
     // Profiles & Cloud Users State

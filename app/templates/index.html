@@ -56,14 +56,14 @@
   </script>
   
   <!-- Custom Stylesheet (Windows 11 Fluent Design) -->
-  <link rel="stylesheet" href="/static/css/styles.css?v={{ app_version }}.filterv2">
+  <link rel="stylesheet" href="/static/css/styles.css?v={{ app_version }}.filterv3">
 
   <!-- Chart.js CDN & Alpine.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 
   <!-- App Logic -->
-  <script src="/static/js/app.js?v={{ app_version }}.filterv2"></script>
+  <script src="/static/js/app.js?v={{ app_version }}.filterv3"></script>
 
 </head>
 <body class="bg-[#f3f3f3] dark:bg-[#202020] text-[#1c1c1c] dark:text-[#ffffff] min-h-screen antialiased flex flex-col transition-colors duration-200" x-data="eeroApp">
@@ -729,82 +729,238 @@
         </div>
 
         <!-- Secondary Toolbar: The 5 Filter Dropdowns in a Balanced Full-Width Grid -->
-        <div class="device-filter-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 xl:grid-cols-5 gap-2.5">
+        <div class="device-filter-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 xl:grid-cols-5 gap-2.5" @click.outside="closeDeviceDropdowns()" @keydown.escape.window="closeDeviceDropdowns()">
           
           <!-- Band Filter -->
           <div class="device-filter-select-wrapper relative sm:col-span-1 md:col-span-2 xl:col-span-1">
-            <select 
-              x-model="selectedBandFilter" 
-              :class="selectedBandFilter !== 'all' ? 'is-active' : ''"
-              class="device-filter-select glass-input w-full px-3 py-2 rounded-xl text-xs" 
-              :aria-label="t('devices.filter_all_bands')">
-              <option value="all" x-text="t('devices.filter_all_bands')"></option>
-              <option value="6GHz" x-text="t('devices.filter_band_6ghz')"></option>
-              <option value="5GHz" x-text="t('devices.filter_band_5ghz')"></option>
-              <option value="2.4GHz" x-text="t('devices.filter_band_24ghz')"></option>
-              <option value="wired" x-text="t('devices.filter_band_wired')"></option>
-            </select>
+            <button 
+              type="button"
+              @click.stop="toggleDeviceDropdown('band')"
+              :class="[
+                selectedBandFilter !== 'all' ? 'is-active' : '',
+                openDeviceDropdown === 'band' ? 'ring-2 ring-sky-500/40 border-sky-500' : ''
+              ]"
+              class="device-filter-btn glass-input w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition shadow-xs cursor-pointer select-none"
+              :aria-label="t('devices.filter_all_bands')"
+              :aria-expanded="openDeviceDropdown === 'band'">
+              <span class="truncate pr-1.5" x-text="getBandFilterLabel()"></span>
+              <svg class="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500 transition-transform duration-150" :class="openDeviceDropdown === 'band' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div 
+              x-show="openDeviceDropdown === 'band'" 
+              x-cloak 
+              x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="opacity-0 -translate-y-1 scale-98"
+              x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+              x-transition:leave-end="opacity-0 -translate-y-1 scale-98"
+              class="device-filter-dropdown-menu">
+              <button type="button" @click="selectedBandFilter = 'all'; closeDeviceDropdowns()" :class="selectedBandFilter === 'all' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_all_bands')"></span>
+                <span x-show="selectedBandFilter === 'all'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedBandFilter = '6GHz'; closeDeviceDropdowns()" :class="selectedBandFilter === '6GHz' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_band_6ghz')"></span>
+                <span x-show="selectedBandFilter === '6GHz'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedBandFilter = '5GHz'; closeDeviceDropdowns()" :class="selectedBandFilter === '5GHz' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_band_5ghz')"></span>
+                <span x-show="selectedBandFilter === '5GHz'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedBandFilter = '2.4GHz'; closeDeviceDropdowns()" :class="selectedBandFilter === '2.4GHz' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_band_24ghz')"></span>
+                <span x-show="selectedBandFilter === '2.4GHz'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedBandFilter = 'wired'; closeDeviceDropdowns()" :class="selectedBandFilter === 'wired' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_band_wired')"></span>
+                <span x-show="selectedBandFilter === 'wired'" class="text-xs">✓</span>
+              </button>
+            </div>
           </div>
 
           <!-- Node Filter -->
           <div class="device-filter-select-wrapper relative sm:col-span-1 md:col-span-2 xl:col-span-1">
-            <select 
-              x-model="selectedNodeFilter" 
-              :class="selectedNodeFilter !== 'all' ? 'is-active' : ''"
-              class="device-filter-select glass-input w-full px-3 py-2 rounded-xl text-xs" 
-              :aria-label="t('devices.filter_all_nodes')">
-              <option value="all" x-text="t('devices.filter_all_nodes')"></option>
+            <button 
+              type="button"
+              @click.stop="toggleDeviceDropdown('node')"
+              :class="[
+                selectedNodeFilter !== 'all' ? 'is-active' : '',
+                openDeviceDropdown === 'node' ? 'ring-2 ring-sky-500/40 border-sky-500' : ''
+              ]"
+              class="device-filter-btn glass-input w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition shadow-xs cursor-pointer select-none"
+              :aria-label="t('devices.filter_all_nodes')"
+              :aria-expanded="openDeviceDropdown === 'node'">
+              <span class="truncate pr-1.5" x-text="getNodeFilterLabel()"></span>
+              <svg class="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500 transition-transform duration-150" :class="openDeviceDropdown === 'node' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div 
+              x-show="openDeviceDropdown === 'node'" 
+              x-cloak 
+              x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="opacity-0 -translate-y-1 scale-98"
+              x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+              x-transition:leave-end="opacity-0 -translate-y-1 scale-98"
+              class="device-filter-dropdown-menu">
+              <button type="button" @click="selectedNodeFilter = 'all'; closeDeviceDropdowns()" :class="selectedNodeFilter === 'all' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_all_nodes')"></span>
+                <span x-show="selectedNodeFilter === 'all'" class="text-xs">✓</span>
+              </button>
               <template x-for="e in eeros" :key="e.id || e.serial">
-                <option :value="e.id" x-text="e.name"></option>
+                <button type="button" @click="selectedNodeFilter = (e.id || e.serial); closeDeviceDropdowns()" :class="selectedNodeFilter === (e.id || e.serial) ? 'is-selected' : ''" class="device-filter-option">
+                  <span class="truncate" x-text="e.name"></span>
+                  <span x-show="selectedNodeFilter === (e.id || e.serial)" class="text-xs">✓</span>
+                </button>
               </template>
-            </select>
+            </div>
           </div>
 
           <!-- Category Filter -->
           <div class="device-filter-select-wrapper relative sm:col-span-2 md:col-span-2 xl:col-span-1">
-            <select 
-              x-model="selectedCategoryFilter" 
-              :class="selectedCategoryFilter !== 'all' ? 'is-active' : ''"
-              class="device-filter-select glass-input w-full px-3 py-2 rounded-xl text-xs" 
-              :aria-label="t('devices.filter_all_categories')">
-              <option value="all" x-text="t('devices.filter_all_categories')"></option>
-              <option value="favorites" x-text="t('devices.filter_favorites')"></option>
-              <option value="Computer" x-text="t('devices.cat_computer')"></option>
-              <option value="Mobile" x-text="t('devices.cat_mobile')"></option>
-              <option value="Smart Home" x-text="t('devices.cat_smarthome')"></option>
-              <option value="Intrattenimento" x-text="t('devices.cat_entertainment')"></option>
-              <option value="Gaming" x-text="t('devices.cat_gaming')"></option>
-              <option value="Server/Rete" x-text="t('devices.cat_server')"></option>
-              <option value="Altro" x-text="t('devices.cat_other')"></option>
-            </select>
+            <button 
+              type="button"
+              @click.stop="toggleDeviceDropdown('category')"
+              :class="[
+                selectedCategoryFilter !== 'all' ? 'is-active' : '',
+                openDeviceDropdown === 'category' ? 'ring-2 ring-sky-500/40 border-sky-500' : ''
+              ]"
+              class="device-filter-btn glass-input w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition shadow-xs cursor-pointer select-none"
+              :aria-label="t('devices.filter_all_categories')"
+              :aria-expanded="openDeviceDropdown === 'category'">
+              <span class="truncate pr-1.5" x-text="getCategoryFilterLabel()"></span>
+              <svg class="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500 transition-transform duration-150" :class="openDeviceDropdown === 'category' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div 
+              x-show="openDeviceDropdown === 'category'" 
+              x-cloak 
+              x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="opacity-0 -translate-y-1 scale-98"
+              x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+              x-transition:leave-end="opacity-0 -translate-y-1 scale-98"
+              class="device-filter-dropdown-menu">
+              <button type="button" @click="selectedCategoryFilter = 'all'; closeDeviceDropdowns()" :class="selectedCategoryFilter === 'all' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_all_categories')"></span>
+                <span x-show="selectedCategoryFilter === 'all'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedCategoryFilter = 'favorites'; closeDeviceDropdowns()" :class="selectedCategoryFilter === 'favorites' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_favorites')"></span>
+                <span x-show="selectedCategoryFilter === 'favorites'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedCategoryFilter = 'Computer'; closeDeviceDropdowns()" :class="selectedCategoryFilter === 'Computer' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.cat_computer')"></span>
+                <span x-show="selectedCategoryFilter === 'Computer'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedCategoryFilter = 'Mobile'; closeDeviceDropdowns()" :class="selectedCategoryFilter === 'Mobile' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.cat_mobile')"></span>
+                <span x-show="selectedCategoryFilter === 'Mobile'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedCategoryFilter = 'Smart Home'; closeDeviceDropdowns()" :class="selectedCategoryFilter === 'Smart Home' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.cat_smarthome')"></span>
+                <span x-show="selectedCategoryFilter === 'Smart Home'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedCategoryFilter = 'Intrattenimento'; closeDeviceDropdowns()" :class="selectedCategoryFilter === 'Intrattenimento' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.cat_entertainment')"></span>
+                <span x-show="selectedCategoryFilter === 'Intrattenimento'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedCategoryFilter = 'Gaming'; closeDeviceDropdowns()" :class="selectedCategoryFilter === 'Gaming' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.cat_gaming')"></span>
+                <span x-show="selectedCategoryFilter === 'Gaming'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedCategoryFilter = 'Server/Rete'; closeDeviceDropdowns()" :class="selectedCategoryFilter === 'Server/Rete' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.cat_server')"></span>
+                <span x-show="selectedCategoryFilter === 'Server/Rete'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedCategoryFilter = 'Altro'; closeDeviceDropdowns()" :class="selectedCategoryFilter === 'Altro' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.cat_other')"></span>
+                <span x-show="selectedCategoryFilter === 'Altro'" class="text-xs">✓</span>
+              </button>
+            </div>
           </div>
 
           <!-- Profile Filter -->
           <div class="device-filter-select-wrapper relative sm:col-span-1 md:col-span-3 xl:col-span-1">
-            <select 
-              x-model="selectedProfileFilter" 
-              :class="selectedProfileFilter !== 'all' ? 'is-active' : ''"
-              class="device-filter-select glass-input w-full px-3 py-2 rounded-xl text-xs" 
-              :aria-label="t('devices.filter_all_profiles')">
-              <option value="all" x-text="t('devices.filter_all_profiles')"></option>
-              <option value="unassigned" x-text="t('devices.filter_unassigned')"></option>
+            <button 
+              type="button"
+              @click.stop="toggleDeviceDropdown('profile')"
+              :class="[
+                selectedProfileFilter !== 'all' ? 'is-active' : '',
+                openDeviceDropdown === 'profile' ? 'ring-2 ring-sky-500/40 border-sky-500' : ''
+              ]"
+              class="device-filter-btn glass-input w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition shadow-xs cursor-pointer select-none"
+              :aria-label="t('devices.filter_all_profiles')"
+              :aria-expanded="openDeviceDropdown === 'profile'">
+              <span class="truncate pr-1.5" x-text="getProfileFilterLabel()"></span>
+              <svg class="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500 transition-transform duration-150" :class="openDeviceDropdown === 'profile' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div 
+              x-show="openDeviceDropdown === 'profile'" 
+              x-cloak 
+              x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="opacity-0 -translate-y-1 scale-98"
+              x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+              x-transition:leave-end="opacity-0 -translate-y-1 scale-98"
+              class="device-filter-dropdown-menu">
+              <button type="button" @click="selectedProfileFilter = 'all'; closeDeviceDropdowns()" :class="selectedProfileFilter === 'all' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_all_profiles')"></span>
+                <span x-show="selectedProfileFilter === 'all'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedProfileFilter = 'unassigned'; closeDeviceDropdowns()" :class="selectedProfileFilter === 'unassigned' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_unassigned')"></span>
+                <span x-show="selectedProfileFilter === 'unassigned'" class="text-xs">✓</span>
+              </button>
               <template x-for="prof in profiles" :key="prof.id">
-                <option :value="prof.id" x-text="'👤 ' + prof.name"></option>
+                <button type="button" @click="selectedProfileFilter = prof.id; closeDeviceDropdowns()" :class="selectedProfileFilter === prof.id ? 'is-selected' : ''" class="device-filter-option">
+                  <span class="truncate" x-text="'👤 ' + prof.name"></span>
+                  <span x-show="selectedProfileFilter === prof.id" class="text-xs">✓</span>
+                </button>
               </template>
-            </select>
+            </div>
           </div>
 
           <!-- IP Type Filter (Static / DHCP) -->
           <div class="device-filter-select-wrapper relative sm:col-span-1 md:col-span-3 xl:col-span-1">
-            <select 
-              x-model="selectedIpTypeFilter" 
-              :class="selectedIpTypeFilter !== 'all' ? 'is-active' : ''"
-              class="device-filter-select glass-input w-full px-3 py-2 rounded-xl text-xs" 
-              :aria-label="t('devices.filter_all_assignments')">
-              <option value="all" x-text="t('devices.filter_all_assignments')"></option>
-              <option value="static" x-text="t('devices.filter_only_static')"></option>
-              <option value="dhcp" x-text="t('devices.filter_only_dhcp')"></option>
-            </select>
+            <button 
+              type="button"
+              @click.stop="toggleDeviceDropdown('ip')"
+              :class="[
+                selectedIpTypeFilter !== 'all' ? 'is-active' : '',
+                openDeviceDropdown === 'ip' ? 'ring-2 ring-sky-500/40 border-sky-500' : ''
+              ]"
+              class="device-filter-btn glass-input w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition shadow-xs cursor-pointer select-none"
+              :aria-label="t('devices.filter_all_assignments')"
+              :aria-expanded="openDeviceDropdown === 'ip'">
+              <span class="truncate pr-1.5" x-text="getIpTypeFilterLabel()"></span>
+              <svg class="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500 transition-transform duration-150" :class="openDeviceDropdown === 'ip' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div 
+              x-show="openDeviceDropdown === 'ip'" 
+              x-cloak 
+              x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="opacity-0 -translate-y-1 scale-98"
+              x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+              x-transition:leave-end="opacity-0 -translate-y-1 scale-98"
+              class="device-filter-dropdown-menu xl:right-0 xl:left-auto">
+              <button type="button" @click="selectedIpTypeFilter = 'all'; closeDeviceDropdowns()" :class="selectedIpTypeFilter === 'all' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_all_assignments')"></span>
+                <span x-show="selectedIpTypeFilter === 'all'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedIpTypeFilter = 'static'; closeDeviceDropdowns()" :class="selectedIpTypeFilter === 'static' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_only_static')"></span>
+                <span x-show="selectedIpTypeFilter === 'static'" class="text-xs">✓</span>
+              </button>
+              <button type="button" @click="selectedIpTypeFilter = 'dhcp'; closeDeviceDropdowns()" :class="selectedIpTypeFilter === 'dhcp' ? 'is-selected' : ''" class="device-filter-option">
+                <span x-text="t('devices.filter_only_dhcp')"></span>
+                <span x-show="selectedIpTypeFilter === 'dhcp'" class="text-xs">✓</span>
+              </button>
+            </div>
           </div>
 
         </div>
