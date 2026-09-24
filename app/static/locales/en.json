@@ -105,7 +105,6 @@
     "filter_all_profiles": "All Profiles / Users",
     "filter_unassigned": "⚪ Unassigned",
     "filter_connected_only": "Connected Only",
-    "reset_filters": "Reset Filters",
     "refresh_title": "Refresh device list",
     "col_device": "Device / Host",
     "col_ip_mac": "IP Address / MAC",

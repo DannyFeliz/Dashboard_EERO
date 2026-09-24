@@ -56,14 +56,14 @@
   </script>
   
   <!-- Custom Stylesheet (Windows 11 Fluent Design) -->
-  <link rel="stylesheet" href="/static/css/styles.css?v={{ app_version }}.filterv1">
+  <link rel="stylesheet" href="/static/css/styles.css?v={{ app_version }}.filterv2">
 
   <!-- Chart.js CDN & Alpine.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 
   <!-- App Logic -->
-  <script src="/static/js/app.js?v={{ app_version }}.filterv1"></script>
+  <script src="/static/js/app.js?v={{ app_version }}.filterv2"></script>
 
 </head>
 <body class="bg-[#f3f3f3] dark:bg-[#202020] text-[#1c1c1c] dark:text-[#ffffff] min-h-screen antialiased flex flex-col transition-colors duration-200" x-data="eeroApp">
@@ -710,17 +710,6 @@
               <span x-text="t('devices.filter_connected_only')"></span>
             </button>
 
-            <!-- Reset Filters Button (Animates in when any filter is active) -->
-            <button
-              type="button"
-              x-show="hasActiveDeviceFilters()"
-              x-cloak
-              @click="resetDeviceFilters()"
-              class="device-reset-btn inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/30 transition cursor-pointer shadow-xs active:scale-95"
-              :title="t('devices.reset_filters')">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-              <span class="hidden sm:inline" x-text="t('devices.reset_filters')"></span>
-            </button>
 
             <!-- Refresh Dispositivi -->
             <button

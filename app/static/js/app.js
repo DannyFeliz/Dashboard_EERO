@@ -75,26 +75,7 @@ document.addEventListener('alpine:init', () => {
     showConnectedOnly: false,
     deviceSortField: 'name',
     deviceSortDirection: 'asc',
-    hasActiveDeviceFilters() {
-      return Boolean(
-        (this.deviceSearchQuery && this.deviceSearchQuery.trim() !== '') ||
-        this.selectedBandFilter !== 'all' ||
-        this.selectedNodeFilter !== 'all' ||
-        this.selectedCategoryFilter !== 'all' ||
-        this.selectedProfileFilter !== 'all' ||
-        this.selectedIpTypeFilter !== 'all' ||
-        this.showConnectedOnly
-      );
-    },
-    resetDeviceFilters() {
-      this.deviceSearchQuery = '';
-      this.selectedBandFilter = 'all';
-      this.selectedNodeFilter = 'all';
-      this.selectedCategoryFilter = 'all';
-      this.selectedProfileFilter = 'all';
-      this.selectedIpTypeFilter = 'all';
-      this.showConnectedOnly = false;
-    },
+
 
     // Profiles & Cloud Users State
     profiles: [],
